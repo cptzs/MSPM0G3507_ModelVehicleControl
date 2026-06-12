@@ -33,7 +33,7 @@
 #include "userapp_state_estimator.h"
 
 /* 协作式 1ms 调度器 */
-#include "user_os.h"
+#include "User_OS/user_os.h"
 
 #include "globals.h"
 

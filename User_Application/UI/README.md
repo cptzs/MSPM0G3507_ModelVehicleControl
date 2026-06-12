@@ -37,13 +37,14 @@
 
 - `user_ui_core.c`
   - 新的注册表驱动 UI 周期任务。
-  - 当前文件已经完成，但在最终修改 IAR 工程前，旧 `../user_ui.c` 仍由当前工程编译。
-  - 最终工程切换时，应让本文件成为唯一提供 `USER_UI_Task()` 的编译单元。
+  - 当前文件已经完成。
+  - 工程切换时，应让本文件成为唯一提供 `USER_UI_Task()` 的编译单元。
+  - 可使用仓库根目录下的 `tools/migrate_iar_ui_core.py` 自动修改 `basic.ewp`。
 
 - `user_ui_legacy_pages.c`
   - 过渡期 legacy 页面包装文件。
   - 通过包含 `../user_ui.c` 复用旧页面绘制函数，同时把旧 `USER_UI_Task()` 重命名为 `USER_UI_LegacyTask()`，避免和新 `user_ui_core.c` 的 `USER_UI_Task()` 重复定义。
-  - 最终修改 `basic.ewp` 时，应使用本文件替代直接编译 `../user_ui.c`。
+  - 工程切换后，应使用本文件替代直接编译 `../user_ui.c`。
   - 后续当 motor/sensors/actuator 等页面逐步迁移到独立文件后，本包装文件可以删除。
 
 - `user_ui_route_context.c`
@@ -75,16 +76,32 @@
   - 旧代码仍可 `#include "user_ui.h"`。
   - 新代码只需要调用 UI 周期任务时，应优先包含 `UI/user_ui_public.h`。
 
+## 工程切换 helper
+
+仓库已新增 `tools/migrate_iar_ui_core.py`，用于把 `basic.ewp` 从旧 UI 入口切换到新 UI core。建议在本地仓库根目录执行：
+
+```bash
+python tools/migrate_iar_ui_core.py
+```
+
+该脚本会执行三类确定性修改：
+
+1. 在 IAR C include path 中加入 `$PROJ_DIR$\User_Application\UI`。
+2. 将 `User_Application\user_ui.c` 编译项替换为 `User_Application\UI\user_ui_legacy_pages.c`。
+3. 新增 `User_Application_UI` 分组，加入 `user_ui_core.c`、`user_ui_core_state.c`、`user_ui_dispatch.c`、`user_ui_input.c`、`user_ui_pages.c`、`user_ui_route_context.c` 以及当前已稳定的新页面文件。
+
+脚本保持 `Minimal_Bringup` 配置排除应用层 UI 文件，和现有工程配置语义一致。执行后建议用 IAR 打开 `basic.eww`，确认 Debug 配置下只存在一个 `USER_UI_Task()`。
+
 ## 当前迁移边界
 
-新 `user_ui_core.c`、`user_ui_page_actuator.c`、`user_ui_page_debug.c`、`user_ui_page_route.c`、`user_ui_pages.c` 等文件已经准备好。为了保持当前工程文件暂时不变，`../user_ui.c` 仍保留原始旧入口；新增的 `user_ui_legacy_pages.c` 是最终工程切换时使用的过渡包装文件。
+新 `user_ui_core.c`、`user_ui_page_actuator.c`、`user_ui_page_debug.c`、`user_ui_page_route.c`、`user_ui_pages.c` 等文件已经准备好。旧页面绘制函数仍通过 `user_ui_legacy_pages.c` 过渡复用。
 
-最终统一修改 `basic.ewp` 时，应：
+工程切换时的目标状态是：
 
-1. 移除或停用直接编译 `User_Application/user_ui.c`。
-2. 加入 `User_Application/UI/user_ui_core.c`。
-3. 加入 `User_Application/UI/user_ui_legacy_pages.c`。
-4. 加入当前所有已稳定的 `User_Application/UI/*.c` 新模块。
+1. 不再直接编译 `User_Application/user_ui.c`。
+2. 编译 `User_Application/UI/user_ui_core.c`，由它提供唯一 `USER_UI_Task()`。
+3. 编译 `User_Application/UI/user_ui_legacy_pages.c`，由它复用尚未迁移的 legacy 页面绘制函数。
+4. 编译当前所有已稳定的 `User_Application/UI/*.c` 新模块。
 
 这样新 core 提供唯一 `USER_UI_Task()`，legacy wrapper 提供尚未迁移的旧页面绘制函数。
 

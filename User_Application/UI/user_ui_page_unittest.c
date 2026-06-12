@@ -1,40 +1,14 @@
 #include "user_ui_internal.h"
+#include "user_ui_unittest_actions.h"
 
 #define UI_UNITTEST_VISIBLE_ROWS 6u
 
 static uint8_t unittest_selected_index = 0u;
 static uint8_t unittest_scroll_top = 0u;
-static const char *unittest_status = "Ready";
-
-typedef struct
-{
-    const char *name;
-    const char *status;
-} USER_UI_UnitTestItem_t;
-
-static const USER_UI_UnitTestItem_t unittest_items[] = {
-    {"MTR FWD", "pending"},
-    {"MTR REV", "pending"},
-    {"MTR SPD0", "pending"},
-    {"MTR STOP", "pending"},
-    {"MTR COAST", "pending"},
-    {"MTR BRAKE", "pending"},
-    {"IMU HELLO", "pending"},
-    {"USB HELLO", "pending"},
-    {"CAM HELLO", "N/A"},
-    {"CAN FRAME", "pending"},
-    {"BUZZ 1MS", "pending"},
-    {"LED 300MS", "pending"},
-};
-
-static uint8_t USER_UI_UnitTest_GetItemCount(void)
-{
-    return (uint8_t)(sizeof(unittest_items) / sizeof(unittest_items[0]));
-}
 
 static void USER_UI_UnitTest_ClampScroll(void)
 {
-    uint8_t item_count = USER_UI_UnitTest_GetItemCount();
+    uint8_t item_count = USER_UI_UT_Action_GetItemCount();
 
     if (item_count <= UI_UNITTEST_VISIBLE_ROWS)
     {
@@ -54,7 +28,7 @@ static void USER_UI_UnitTest_ClampScroll(void)
 
 void USER_UI_UnitTestOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
-    uint8_t item_count = USER_UI_UnitTest_GetItemCount();
+    uint8_t item_count = USER_UI_UT_Action_GetItemCount();
 
     if ((event == USER_UI_KEY_EVENT_NONE) || (item_count == 0u))
     {
@@ -84,7 +58,8 @@ void USER_UI_UnitTestOnKey(Button_t key, USER_UI_KeyEvent_t event)
     }
     else if (key == ENTER)
     {
-        unittest_status = unittest_items[unittest_selected_index].status;
+        /* 通过动作层执行硬件操作，UI 页面不直接操作硬件 */
+        (void)USER_UI_UT_Action_Execute(unittest_selected_index);
     }
 }
 
@@ -102,23 +77,10 @@ void USER_UI_ShowUnitTestStatic(void)
 void USER_UI_ShowUnitTestDynamic(void)
 {
     uint8_t row;
-    uint8_t item_count = USER_UI_UnitTest_GetItemCount();
+    uint8_t item_count = USER_UI_UT_Action_GetItemCount();
     char line_buf[22];
 
-    if (USER_LBB_Button_ConsumeShort(UP) || USER_LBB_Button_ConsumeLongRepeat(UP))
-    {
-        USER_UI_UnitTestOnKey(UP, USER_UI_KEY_EVENT_SHORT);
-    }
-
-    if (USER_LBB_Button_ConsumeShort(DOWN) || USER_LBB_Button_ConsumeLongRepeat(DOWN))
-    {
-        USER_UI_UnitTestOnKey(DOWN, USER_UI_KEY_EVENT_SHORT);
-    }
-
-    if (USER_LBB_Button_ConsumeShort(ENTER))
-    {
-        USER_UI_UnitTestOnKey(ENTER, USER_UI_KEY_EVENT_SHORT);
-    }
+    /* 按键由 core 层通过 on_key() 回调统一分发，动态刷新函数不再直读按键 */
 
     USER_UI_UnitTest_ClampScroll();
 
@@ -133,7 +95,7 @@ void USER_UI_ShowUnitTestDynamic(void)
                            sizeof(line_buf),
                            "%c%-12s %02u/%02u",
                            (item_index == unittest_selected_index) ? '>' : ' ',
-                           unittest_items[item_index].name,
+                           USER_UI_UT_Action_GetItemName(item_index),
                            (unsigned)(item_index + 1u),
                            (unsigned)item_count);
         }
@@ -146,5 +108,7 @@ void USER_UI_ShowUnitTestDynamic(void)
     }
 
     USER_OLED_putString(7u, 0u, "STAT:               ", 21u);
-    USER_OLED_putString(7u, 6u, unittest_status, 15u);
+    USER_OLED_putString(7u, 6u,
+                        USER_UI_UT_Action_GetStatus(unittest_selected_index),
+                        15u);
 }

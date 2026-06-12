@@ -8,7 +8,7 @@ static const USER_UI_PageDef_t ui_page_table[] = {
     {PAGE_LIDAR, "LiDAR Sensors", USER_UI_ShowLidarPageStatic, USER_UI_ShowLidarPageDynamic, USER_UI_LidarOnKey},
     {PAGE_GYROSCOPE, "IMU Data     ", USER_UI_ShowGyroscopePageStatic, USER_UI_ShowGyroscopePageDynamic, USER_UI_GyroscopeOnKey},
     {PAGE_IMU_SUM, "IMU Sum Data ", USER_UI_ShowIMUSumPageStatic, USER_UI_ShowIMUSumPageDynamic, USER_UI_IMUSumOnKey},
-    {PAGE_CAMERA, "Smart Camera ", USER_UI_ShowCameraStatic, USER_UI_ShowCameraDynamic, NULL},
+    {PAGE_CAMERA, "Smart Camera ", USER_UI_ShowCameraPageStatic, USER_UI_ShowCameraPageDynamic, NULL},
     {PAGE_SERVO, "Servo Control", USER_UI_ShowActuatorPageStatic, USER_UI_ShowActuatorPageDynamic, NULL},
     {PAGE_DEBUG, "Threads      ", USER_UI_ShowDebugPageStatic, USER_UI_ShowDebugPageDynamic, NULL},
     {PAGE_TEMPLATE, "Template Path", USER_UI_ShowRouteStatic, USER_UI_ShowRouteDynamic, USER_UI_RouteOnKey},

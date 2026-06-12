@@ -2742,6 +2742,18 @@
                 <configuration>Minimal_Bringup</configuration>
             </excluded>
         </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_page_camera.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_unittest_actions.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
     </group>
     <group>
         <name>User_Devices</name>

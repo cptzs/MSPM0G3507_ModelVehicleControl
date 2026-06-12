@@ -163,6 +163,8 @@ void USER_UI_ShowActuatorPageStatic(void);
 void USER_UI_ShowActuatorPageDynamic(void);
 void USER_UI_ShowDebugPageStatic(void);
 void USER_UI_ShowDebugPageDynamic(void);
+void USER_UI_ShowCameraPageStatic(void);
+void USER_UI_ShowCameraPageDynamic(void);
 void USER_UI_ShowIMUSumPageStatic(void);
 void USER_UI_ShowIMUSumPageDynamic(void);
 void USER_UI_IMUSumOnKey(Button_t key, USER_UI_KeyEvent_t event);

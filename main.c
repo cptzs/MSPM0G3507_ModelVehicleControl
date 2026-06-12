@@ -32,7 +32,7 @@
 #include "userlib_servo.h"
 
 /* 用户应用头文件 */
-#include "user_ui.h"
+#include "User_UI/user_ui_public.h"
 #include "userapp_mcm.h"
 #include "userapp_race.h"
 #include "userapp_state_estimator.h"

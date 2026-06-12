@@ -11,7 +11,18 @@
 - `user_ui_internal.h`
   - UI 内部接口。
   - 暂时保存页面枚举、legacy 页面函数声明和旧页面实现依赖。
+  - 已新增页面描述符 `USER_UI_PageDef_t` 和页面表访问接口，为后续替换 legacy 大 `switch` 做准备。
   - 后续每迁移一个页面，就应把对应依赖下沉到该页面自己的 `.c` 文件中。
+
+- `user_ui_pages.c`
+  - 新 UI 页面注册表。
+  - 当前注册了前 11 个 legacy 页面，并预留 `PAGE_UNITTEST`。
+  - 该文件暂未接入 legacy `user_ui.c` 的页面切换逻辑，避免一次性重写主 UI 文件。
+
+- `user_ui_page_unittest.c`
+  - UnitTest 页面的 UI 骨架。
+  - 当前只实现列表、上下选择、ENTER 更新状态，不直接执行电机/CAN/串口等硬件动作。
+  - 后续硬件动作建议通过单独的测试动作层接入，避免 UI 页面直接堆积危险操作细节。
 
 - `../user_ui.h`
   - 兼容入口。
@@ -43,3 +54,4 @@ User_Application/UI/
 3. 页面内按键不要直接抢读所有按键，后续应由 `user_ui_core.c` 统一消费并分发。
 4. UnitTest 页面应作为独立页面新增，不再复用 `PAGE_CAMERA`。
 5. 修改 IAR 工程文件前，先确保新增 `.c` 文件职责稳定。
+6. legacy `user_ui.c` 中的页面标题数组和两个页面分发 `switch` 后续应替换为 `user_ui_pages.c` 页面表。

@@ -143,6 +143,8 @@ void USER_UI_ShowTemplateStatic(void);
 void USER_UI_ShowTemplateDynamic(void);
 
 /* ---- 新分层页面 ---- */
+void USER_UI_ShowMotorPageStatic(void);
+void USER_UI_ShowMotorPageDynamic(void);
 void USER_UI_ShowActuatorPageStatic(void);
 void USER_UI_ShowActuatorPageDynamic(void);
 void USER_UI_ShowDebugPageStatic(void);

@@ -48,10 +48,53 @@ typedef enum
 // 按钮状态定义
 typedef enum
 {
-    RELEASED,
+    RELEASED = 0,
     PRESSED,
     LONG_PRESSED // 长按状态
 } ButtonState_t;
+
+/**
+ * @brief 按钮事件类型。
+ *
+ * 旧接口 USER_LBB_Button_ReadState() 会把 SHORT 映射为 PRESSED，
+ * 把 LONG 和 LONG_REPEAT 映射为 LONG_PRESSED。
+ */
+typedef enum
+{
+    USER_LBB_BUTTON_EVENT_NONE = 0,
+    USER_LBB_BUTTON_EVENT_SHORT,
+    USER_LBB_BUTTON_EVENT_LONG,
+    USER_LBB_BUTTON_EVENT_LONG_REPEAT
+} USER_LBB_ButtonEvent_t;
+
+/**
+ * @brief 按钮调试统计信息。
+ *
+ * 生成次数和消费次数都使用 uint16_t 自然回绕。
+ * pending = generated - consumed。
+ */
+typedef struct
+{
+    uint16_t press_down_count;       // 按下边沿次数
+    uint16_t short_press_count;      // 短按生成次数（松手时确认）
+    uint16_t long_press_count;       // 长按首次触发次数
+    uint16_t long_repeat_count;      // 长按重复触发次数
+
+    uint16_t consumed_short_count;   // 短按消费次数
+    uint16_t consumed_long_count;    // 长按首次触发消费次数
+    uint16_t consumed_repeat_count;  // 长按重复触发消费次数
+
+    uint16_t pending_short_count;    // 未消费短按次数
+    uint16_t pending_long_count;     // 未消费长按首次触发次数
+    uint16_t pending_repeat_count;   // 未消费长按重复触发次数
+
+    uint16_t press_time_ms;          // 当前持续按下时间
+    uint16_t repeat_time_ms;         // 当前长按重复计时
+    ButtonState_t physical_state;    // 当前扫描到的物理状态
+    ButtonState_t legacy_state;      // 兼容旧接口的下一事件状态
+    bool is_pressed;                 // 当前物理上是否按下
+    bool long_reported;              // 本次按下是否已触发过长按
+} USER_LBB_ButtonStats_t;
 
 // 外部变量声明
 extern uint16_t led_countdown[LED_COUNT];
@@ -104,17 +147,40 @@ static inline void USER_LBB_Buzzer_Off(void)
     buzzer_countdown = 0;
 }
 
-/// @brief 获取指定按钮的当前状态（读取后自动清除短按和长按事件）
+/// @brief 获取指定按钮的当前状态（兼容旧接口，读取后消费一个事件）
 /// @param button 按钮编号（使用Button_t枚举）
-/// @return 按钮状态：RELEASED(未按下), PRESSED(短按), LONG_PRESSED(长按)
-static inline ButtonState_t USER_LBB_Button_ReadState(Button_t button)
-{
-    ButtonState_t state = button_state[button];
-    if (state == PRESSED || state == LONG_PRESSED)
-    {
-        button_state[button] = RELEASED; // 读取后自动清除事件标志
-    }
-    return state;
-}
+/// @return 按钮状态：RELEASED(无事件), PRESSED(短按), LONG_PRESSED(长按或长按重复)
+ButtonState_t USER_LBB_Button_ReadState(Button_t button);
+
+/// @brief 消费一个按钮事件。
+/// @details 消费优先级：LONG -> LONG_REPEAT -> SHORT。
+USER_LBB_ButtonEvent_t USER_LBB_Button_ConsumeEvent(Button_t button);
+
+/// @brief 获取未消费短按次数。
+uint16_t USER_LBB_Button_GetPendingShortCount(Button_t button);
+
+/// @brief 获取未消费长按首次触发次数。
+uint16_t USER_LBB_Button_GetPendingLongCount(Button_t button);
+
+/// @brief 获取未消费长按重复触发次数。
+uint16_t USER_LBB_Button_GetPendingLongRepeatCount(Button_t button);
+
+/// @brief 消费一个短按事件。
+bool USER_LBB_Button_ConsumeShort(Button_t button);
+
+/// @brief 消费一个长按首次触发事件。
+bool USER_LBB_Button_ConsumeLong(Button_t button);
+
+/// @brief 消费一个长按重复触发事件。
+bool USER_LBB_Button_ConsumeLongRepeat(Button_t button);
+
+/// @brief 获取按钮调试统计信息。
+bool USER_LBB_Button_GetStats(Button_t button, USER_LBB_ButtonStats_t *stats);
+
+/// @brief 清空指定按钮的事件计数和消费计数。
+bool USER_LBB_Button_ClearStats(Button_t button);
+
+/// @brief 清空全部按钮的事件计数和消费计数。
+void USER_LBB_Button_ClearAllStats(void);
 
 #endif // USERLIB_LBB_H

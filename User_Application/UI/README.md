@@ -11,7 +11,7 @@
 - `user_ui_internal.h`
   - UI 内部接口。
   - 暂时保存页面枚举、legacy 页面函数声明和旧页面实现依赖。
-  - 已新增页面描述符 `USER_UI_PageDef_t`、页面表访问接口和注册表分发 helper。
+  - 已新增页面描述符 `USER_UI_PageDef_t`、页面表访问接口、注册表分发 helper、输入事件适配、页面状态 helper 和路线启动 context 接口。
   - 后续每迁移一个页面，就应把对应依赖下沉到该页面自己的 `.c` 文件中。
 
 - `user_ui_pages.c`
@@ -23,6 +23,21 @@
   - 页面注册表通用分发层。
   - 提供按页面号绘制静态内容、绘制动态内容、分发页面按键、获取上一页/下一页等 helper。
   - 后续 legacy `user_ui.c` 中的页面标题数组、两个页面分发 `switch`、`PREV/NEXT` 边界判断应优先替换为这里的 helper。
+
+- `user_ui_input.c`
+  - UI 输入适配层。
+  - 将 `userlib_lbb` 的计数型按钮事件转换为 UI 内部的 `USER_UI_KeyEvent_t`。
+  - 后续 `user_ui_core.c` 应通过该文件统一消费按钮事件，再分发给当前页面。
+
+- `user_ui_core_state.c`
+  - UI 核心状态 helper。
+  - 维护当前页面和静态内容脏标志，提供页面切换、静态重绘和动态刷新 helper。
+  - 这是后续抽出 `user_ui_core.c` 的中间层。
+
+- `user_ui_route_context.c`
+  - 路线启动交互 context。
+  - 承接 `Template Path` 页的长按蓄力、稳定倒计时、待启动路线和倒计时结束启动路线逻辑。
+  - 当前尚未替换 legacy `user_ui.c` 中的同名状态，下一步应把旧主循环切到该 context。
 
 - `user_ui_page_unittest.c`
   - UnitTest 页面的 UI 骨架。
@@ -36,7 +51,7 @@
 
 ## 当前迁移边界
 
-`Template Path` 页的长按蓄力、稳定倒计时、蜂鸣提示状态仍保存在 legacy `user_ui.c` 的文件内 `static` 变量中，`USER_UI_ShowTemplateDynamic()` 也直接读取这些变量。因此在迁移 `USER_UI_Task()` 之前，必须先把路线启动交互状态抽成独立 context 或迁移到 `user_ui_page_route.c`，否则直接新增独立 `user_ui_core.c` 会破坏模板路线启动逻辑。
+`Template Path` 页的长按蓄力、稳定倒计时、蜂鸣提示状态仍保存在 legacy `user_ui.c` 的文件内 `static` 变量中，`USER_UI_ShowTemplateDynamic()` 也直接读取这些变量。因此在迁移 `USER_UI_Task()` 之前，必须先把旧主循环中的路线启动交互状态切换到 `user_ui_route_context.c`，否则直接新增独立 `user_ui_core.c` 会破坏模板路线启动逻辑。
 
 ## 后续目标结构
 
@@ -47,8 +62,11 @@ User_Application/UI/
 ├─ user_ui_public.h
 ├─ user_ui_internal.h
 ├─ user_ui_core.c
+├─ user_ui_core_state.c
+├─ user_ui_input.c
 ├─ user_ui_pages.c
 ├─ user_ui_dispatch.c
+├─ user_ui_route_context.c
 ├─ user_ui_page_motor.c
 ├─ user_ui_page_sensors.c
 ├─ user_ui_page_actuator.c
@@ -65,3 +83,4 @@ User_Application/UI/
 4. UnitTest 页面应作为独立页面新增，不再复用 `PAGE_CAMERA`。
 5. 修改 IAR 工程文件前，先确保新增 `.c` 文件职责稳定。
 6. legacy `user_ui.c` 中的页面标题数组和两个页面分发 `switch` 后续应替换为 `user_ui_dispatch.c` helper。
+7. legacy `user_ui.c` 中的路线启动状态后续应替换为 `user_ui_route_context.c`。

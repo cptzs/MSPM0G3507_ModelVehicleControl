@@ -1,13 +1,21 @@
+/**
+ * @file userlib_lbb.c
+ * @brief LED / 蜂鸣器 / 按钮 (LBB) 硬件驱动。
+ *
+ * 实现计数型按钮事件模型：短按/长按/长按重复各维护独立 pending 计数器，
+ * 上层通过消费接口读取并清除事件，避免同一事件被多次处理。
+ * 同时管理 4 路 LED 闪烁定时和蜂鸣器单次/定时鸣响。
+ */
+
 #include "userlib_lbb.h"
 
-// GPIO管理
-uint16_t led_countdown[LED_COUNT] = {0};         // LED倒计时
-uint16_t buzzer_countdown = 0;                   // 蜂鸣器倒计时
-uint16_t button_scan_countdown = 0;              // 按钮扫描倒计时
-uint8_t button_state[BUTTON_COUNT] = {0};        // 兼容旧接口的下一事件状态
-uint8_t button_state_old[BUTTON_COUNT] = {0};    // 按钮物理状态旧值
-uint16_t button_press_time[BUTTON_COUNT] = {0};  // 按键按下持续时间
-uint16_t button_repeat_time[BUTTON_COUNT] = {0}; // 长按重复计时
+/* ---- GPIO 管理状态 ---- */
+uint16_t led_countdown[LED_COUNT] = {0};         /* LED 闪烁倒计时 */
+uint16_t buzzer_countdown = 0;                   /* 蜂鸣器倒计时 */
+uint16_t button_scan_countdown = 0;              /* 按钮扫描倒计时 */
+uint8_t button_state_old[BUTTON_COUNT] = {0};    /* 按钮物理状态旧值 */
+uint16_t button_press_time[BUTTON_COUNT] = {0};  /* 按键按下持续时间 */
+uint16_t button_repeat_time[BUTTON_COUNT] = {0}; /* 长按重复计时 */
 
 static uint16_t button_down_count[BUTTON_COUNT] = {0};
 static uint16_t button_short_count[BUTTON_COUNT] = {0};
@@ -20,64 +28,71 @@ static uint16_t button_long_repeat_consumed[BUTTON_COUNT] = {0};
 
 static bool button_long_reported[BUTTON_COUNT] = {false};
 
-/// @brief LED引脚定义
+/**
+ * @brief LED 引脚定义数组。
+ */
 const uint32_t LEDS_PINS[LED_COUNT] = {
-    LED_LED0_PIN, // LED0
-    LED_LED1_PIN, // LED1
-    LED_LED2_PIN, // LED2
-    LED_LED3_PIN, // LED3
+    LED_LED0_PIN, /* LED0 */
+    LED_LED1_PIN, /* LED1 */
+    LED_LED2_PIN, /* LED2 */
+    LED_LED3_PIN, /* LED3 */
 };
 
-/// @brief 按钮引脚定义
+/**
+ * @brief 按钮引脚定义数组（低电平有效）。
+ */
 const uint32_t BUTTON_PINS[BUTTON_COUNT] = {
-    BUTTON_UP_PIN,    // 上按钮
-    BUTTON_DOWN_PIN,  // 下按钮
-    BUTTON_LEFT_PIN,  // 左按钮
-    BUTTON_RIGHT_PIN, // 右按钮
-    BUTTON_PREV_PIN,  // 上一页按钮
-    BUTTON_NEXT_PIN,  // 下一页按钮
-    BUTTON_ENTER_PIN, // 确认按钮
-    BUTTON_ESC_PIN    // 取消按钮
+    BUTTON_UP_PIN,    /* 上按钮 */
+    BUTTON_DOWN_PIN,  /* 下按钮 */
+    BUTTON_LEFT_PIN,  /* 左按钮 */
+    BUTTON_RIGHT_PIN, /* 右按钮 */
+    BUTTON_PREV_PIN,  /* 上一页按钮 */
+    BUTTON_NEXT_PIN,  /* 下一页按钮 */
+    BUTTON_ENTER_PIN, /* 确认按钮 */
+    BUTTON_ESC_PIN    /* 取消按钮 */
 };
 
+/**
+ * @brief 校验按钮枚举值是否合法。
+ * @param button 按钮枚举值。
+ * @retval true 合法。
+ * @retval false 越界。
+ */
 static bool USER_LBB_Button_IsValid(Button_t button)
 {
     int button_index = (int)button;
     return ((button_index >= 0) && (button_index < BUTTON_COUNT));
 }
 
+/**
+ * @brief 计算未消费的短按事件数量（生成数 - 已消费数）。
+ */
 static uint16_t USER_LBB_Button_PendingShortRaw(uint8_t button)
 {
     return (uint16_t)(button_short_count[button] - button_short_consumed[button]);
 }
 
+/**
+ * @brief 计算未消费的长按事件数量。
+ */
 static uint16_t USER_LBB_Button_PendingLongRaw(uint8_t button)
 {
     return (uint16_t)(button_long_count[button] - button_long_consumed[button]);
 }
 
+/**
+ * @brief 计算未消费的长按重复事件数量。
+ */
 static uint16_t USER_LBB_Button_PendingLongRepeatRaw(uint8_t button)
 {
     return (uint16_t)(button_long_repeat_count[button] - button_long_repeat_consumed[button]);
 }
 
-static void USER_LBB_Button_UpdateLegacyState(uint8_t button)
-{
-    if ((USER_LBB_Button_PendingLongRaw(button) > 0u) ||
-        (USER_LBB_Button_PendingLongRepeatRaw(button) > 0u))
-    {
-        button_state[button] = LONG_PRESSED;
-    }
-    else if (USER_LBB_Button_PendingShortRaw(button) > 0u)
-    {
-        button_state[button] = PRESSED;
-    }
-    else
-    {
-        button_state[button] = RELEASED;
-    }
-}
-
+/**
+ * @brief 安全的 uint16_t 累加（防溢出，达上限后饱和）。
+ * @param value 被累加变量指针。
+ * @param delta 增量。
+ */
 static void USER_LBB_Button_AddTime(uint16_t *value, uint16_t delta)
 {
     if (*value <= (uint16_t)(UINT16_MAX - delta))
@@ -90,34 +105,41 @@ static void USER_LBB_Button_AddTime(uint16_t *value, uint16_t delta)
     }
 }
 
+/**
+ * @brief 确认一次短按事件：递增短按计数、更新兼容状态、蜂鸣反馈 20ms。
+ */
 static void USER_LBB_Button_OnShort(uint8_t button)
 {
     button_short_count[button]++;
-    USER_LBB_Button_UpdateLegacyState(button);
     USER_LBB_Buzzer_On(20);
 }
 
+/**
+ * @brief 确认一次长按事件：递增长按计数、标记已触发、重置重复计时、蜂鸣反馈 10ms。
+ */
 static void USER_LBB_Button_OnLong(uint8_t button)
 {
     button_long_count[button]++;
     button_long_reported[button] = true;
     button_repeat_time[button] = 0u;
-    USER_LBB_Button_UpdateLegacyState(button);
     USER_LBB_Buzzer_On(10);
 }
 
+/**
+ * @brief 确认一次长按重复事件：递增重复计数、更新兼容状态、蜂鸣反馈 10ms。
+ */
 static void USER_LBB_Button_OnLongRepeat(uint8_t button)
 {
     button_long_repeat_count[button]++;
-    USER_LBB_Button_UpdateLegacyState(button);
     USER_LBB_Buzzer_On(10);
 }
 
-/// @brief GPIO处理的SysTick回调函数
-/// @param  无
-/// @return 无
-/// @note 该函数在SysTick中断时被调用，用于处理GPIO相关的操作
-///       包括LED控制、蜂鸣器控制和按钮状态管理
+/**
+ * @brief GPIO 处理的 SysTick 回调 (每 1ms)。
+ * @details 同时管理 LED 闪烁、蜂鸣器定时和按钮扫描状态机。
+ *          按钮扫描策略：每隔 BUTTON_SCAN_INTERVAL ms 采样一次物理电平，
+ *          通过边沿和时长判断生成短按/长按/长按重复事件。
+ */
 void USER_SysTick_Callback_GPIO_Process(void)
 {
     uint8_t i;
@@ -228,6 +250,11 @@ void USER_SysTick_Callback_GPIO_Process(void)
     }
 }
 
+/**
+ * @brief 获取指定按钮的未消费短按事件数量。
+ * @param button 按钮枚举值。
+ * @return 待消费的短按计数。
+ */
 uint16_t USER_LBB_Button_GetPendingShortCount(Button_t button)
 {
     if (!USER_LBB_Button_IsValid(button))
@@ -238,6 +265,11 @@ uint16_t USER_LBB_Button_GetPendingShortCount(Button_t button)
     return USER_LBB_Button_PendingShortRaw((uint8_t)button);
 }
 
+/**
+ * @brief 获取指定按钮的未消费长按事件数量。
+ * @param button 按钮枚举值。
+ * @return 待消费的长按计数。
+ */
 uint16_t USER_LBB_Button_GetPendingLongCount(Button_t button)
 {
     if (!USER_LBB_Button_IsValid(button))
@@ -248,6 +280,11 @@ uint16_t USER_LBB_Button_GetPendingLongCount(Button_t button)
     return USER_LBB_Button_PendingLongRaw((uint8_t)button);
 }
 
+/**
+ * @brief 获取指定按钮的未消费长按重复事件数量。
+ * @param button 按钮枚举值。
+ * @return 待消费的长按重复计数。
+ */
 uint16_t USER_LBB_Button_GetPendingLongRepeatCount(Button_t button)
 {
     if (!USER_LBB_Button_IsValid(button))
@@ -258,6 +295,13 @@ uint16_t USER_LBB_Button_GetPendingLongRepeatCount(Button_t button)
     return USER_LBB_Button_PendingLongRepeatRaw((uint8_t)button);
 }
 
+/**
+ * @brief 消费一个短按事件。
+ * @details 读取并清除一个待处理的短按事件。
+ * @param button 按钮枚举值。
+ * @retval true 存在并成功消费了一个短按事件。
+ * @retval false 无待消费的短按事件或按钮无效。
+ */
 bool USER_LBB_Button_ConsumeShort(Button_t button)
 {
     uint8_t index;
@@ -274,10 +318,15 @@ bool USER_LBB_Button_ConsumeShort(Button_t button)
     }
 
     button_short_consumed[index]++;
-    USER_LBB_Button_UpdateLegacyState(index);
     return true;
 }
 
+/**
+ * @brief 消费一个长按事件。
+ * @param button 按钮枚举值。
+ * @retval true 存在并成功消费了一个长按事件。
+ * @retval false 无待消费的长按事件或按钮无效。
+ */
 bool USER_LBB_Button_ConsumeLong(Button_t button)
 {
     uint8_t index;
@@ -294,10 +343,15 @@ bool USER_LBB_Button_ConsumeLong(Button_t button)
     }
 
     button_long_consumed[index]++;
-    USER_LBB_Button_UpdateLegacyState(index);
     return true;
 }
 
+/**
+ * @brief 消费一个长按重复事件。
+ * @param button 按钮枚举值。
+ * @retval true 存在并成功消费了一个长按重复事件。
+ * @retval false 无待消费的长按重复事件或按钮无效。
+ */
 bool USER_LBB_Button_ConsumeLongRepeat(Button_t button)
 {
     uint8_t index;
@@ -314,10 +368,15 @@ bool USER_LBB_Button_ConsumeLongRepeat(Button_t button)
     }
 
     button_long_repeat_consumed[index]++;
-    USER_LBB_Button_UpdateLegacyState(index);
     return true;
 }
 
+/**
+ * @brief 消费按钮事件（按优先级：长按 > 长按重复 > 短按）。
+ * @details 调用后对应事件的 pending 计数减一，事件不会被重复消费。
+ * @param button 按钮枚举值。
+ * @return 事件类型；无事件时返回 USER_LBB_BUTTON_EVENT_NONE。
+ */
 USER_LBB_ButtonEvent_t USER_LBB_Button_ConsumeEvent(Button_t button)
 {
     if (USER_LBB_Button_ConsumeLong(button))
@@ -338,25 +397,13 @@ USER_LBB_ButtonEvent_t USER_LBB_Button_ConsumeEvent(Button_t button)
     return USER_LBB_BUTTON_EVENT_NONE;
 }
 
-ButtonState_t USER_LBB_Button_ReadState(Button_t button)
-{
-    USER_LBB_ButtonEvent_t event = USER_LBB_Button_ConsumeEvent(button);
-
-    switch (event)
-    {
-    case USER_LBB_BUTTON_EVENT_SHORT:
-        return PRESSED;
-
-    case USER_LBB_BUTTON_EVENT_LONG:
-    case USER_LBB_BUTTON_EVENT_LONG_REPEAT:
-        return LONG_PRESSED;
-
-    case USER_LBB_BUTTON_EVENT_NONE:
-    default:
-        return RELEASED;
-    }
-}
-
+/**
+ * @brief 获取指定按钮的完整统计信息。
+ * @param button 按钮枚举值。
+ * @param stats 输出统计结构体指针（不可为 NULL）。
+ * @retval true 获取成功。
+ * @retval false 参数无效。
+ */
 bool USER_LBB_Button_GetStats(Button_t button, USER_LBB_ButtonStats_t *stats)
 {
     uint8_t index;
@@ -384,13 +431,18 @@ bool USER_LBB_Button_GetStats(Button_t button, USER_LBB_ButtonStats_t *stats)
     stats->press_time_ms = button_press_time[index];
     stats->repeat_time_ms = button_repeat_time[index];
     stats->physical_state = (ButtonState_t)button_state_old[index];
-    stats->legacy_state = (ButtonState_t)button_state[index];
     stats->is_pressed = (button_state_old[index] == PRESSED);
     stats->long_reported = button_long_reported[index];
 
     return true;
 }
 
+/**
+ * @brief 清零指定按钮的全部统计计数和状态。
+ * @param button 按钮枚举值。
+ * @retval true 清零成功。
+ * @retval false 按钮无效。
+ */
 bool USER_LBB_Button_ClearStats(Button_t button)
 {
     uint8_t index;
@@ -412,11 +464,13 @@ bool USER_LBB_Button_ClearStats(Button_t button)
     button_press_time[index] = 0u;
     button_repeat_time[index] = 0u;
     button_long_reported[index] = false;
-    button_state[index] = RELEASED;
 
     return true;
 }
 
+/**
+ * @brief 清零所有按钮的全部统计计数和状态。
+ */
 void USER_LBB_Button_ClearAllStats(void)
 {
     uint8_t i;
@@ -427,8 +481,10 @@ void USER_LBB_Button_ClearAllStats(void)
     }
 }
 
-/// @brief 初始化LED、蜂鸣器和按钮的GPIO引脚
-/// @return 无
+/**
+ * @brief 初始化 LBB 模块（LED、蜂鸣器、按钮 GPIO 及 SysTick 回调）。
+ * @details 清零所有 LED/蜂鸣器倒计时和按钮统计，注册 SysTick 扫描回调。
+ */
 void USER_LBB_Init(void)
 {
     uint8_t i;
@@ -442,7 +498,6 @@ void USER_LBB_Init(void)
     // 初始化按钮状态
     for (i = 0; i < BUTTON_COUNT; i++)
     {
-        button_state[i] = RELEASED;
         button_state_old[i] = RELEASED;
         button_press_time[i] = 0;
         button_repeat_time[i] = 0;

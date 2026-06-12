@@ -1,3 +1,12 @@
+/**
+ * @file main.c
+ * @brief 主入口：设备初始化、调度器注册、主循环。
+ *
+ * 启动流程：SYSCFG_DL_init → USER_SYSTEM_Init → USER_OS_Init →
+ * USER_GlobalData_Init → USER_Device_Init → USER_STATE_Init →
+ * USER_RegisterSchedulerTasks → while(1) USER_OS_Run()
+ */
+
 #include "ti_msp_dl_config.h"
 #include "user_config.h"
 
@@ -8,7 +17,7 @@
 #include "userlib_adc.h"
 #include "userlib_can.h"
 #include "userlib_pwm.h"
-#include "userlib_sys.h"
+#include "userlib_systick.h"
 #include "userlib_uart.h"
 
 /* 用户设备头文件 */
@@ -18,11 +27,7 @@
 #include "userlib_lidar.h"
 #include "userlib_modbus.h"
 #include "userlib_motor.h"
-#if OEMT_SENSOR_MODE == OEMT_SENSOR_MODE_DG
-#include "userlib_oemt_dg.h"
-#else
-#include "userlib_oemt_an.h"
-#endif
+#include "userlib_oemt.h"
 #include "userlib_oled.h"
 #include "userlib_servo.h"
 
@@ -40,8 +45,7 @@
 /**
  * @brief 用户设备初始化。
  *
- * 当前工程默认启动所有外部设备，不再通过宏裁剪设备启动逻辑。
- * OEMT 由于模拟式和数字式共享同一组物理接口，仍通过 OEMT_SENSOR_MODE 做互斥选择。
+ * 当前工程默认启动所有外部设备。
  */
 static void USER_Device_Init(void)
 {
@@ -54,11 +58,7 @@ static void USER_Device_Init(void)
   USER_SERVO_Init();
   USER_lidar_Init(lidar_data);
 
-#if OEMT_SENSOR_MODE == OEMT_SENSOR_MODE_DG
-  USER_OEMT_DG_Init(oemt_data);
-#else
   USER_OEMT_AN_Init(oemt_data, &adc_data[ADC_CHANNEL_2_P25]);
-#endif
 
   USER_Modbus_Slave_Init(true, UART_1, modbus_regs, &modbus_status);
 }
@@ -80,10 +80,10 @@ static void USER_Heartbeat_Task(void)
  *       参数说明：
  *       - name:       任务名称字符串，用于调试和统计。
  *       - task_func:  任务函数指针，须短小、非阻塞。
- *       - period_ms:  执行周期（毫秒），如 1u=每 tick 执行，500u=每 500ms 执行一次。
+ *       - period_ms:  执行周期（毫秒），如 1u=每1ms执行，500u=每 500ms 执行一次。
  *       - offset_ms:  首次触发偏移（毫秒），用于错峰，避免多个同周期任务在同一 tick
  *                     集中运行，降低瞬时 CPU 负载。
- *       - priority:   调度优先级，数值越小优先级越高。在同一个 tick 内就绪的多个任务
+ *       - priority:   调度优先级，数值越小优先级越高。在同一个ms内就绪的多个任务
  *                     中，优先级高的先执行。
  *
  *       所有任务仍在 main while(1) 前台上下文中运行，不由独立栈或 PendSV 切换。

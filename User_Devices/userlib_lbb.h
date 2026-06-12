@@ -12,7 +12,7 @@
 #include <math.h>    //数学库函数
 
 // 用户外设接口头文件
-#include "userlib_sys.h" // 系统时间和SysTick相关函数
+#include "userlib_systick.h" // SysTick驱动接口
 
 // LED控制相关宏定义
 #define LED_COUNT 4
@@ -55,9 +55,6 @@ typedef enum
 
 /**
  * @brief 按钮事件类型。
- *
- * 旧接口 USER_LBB_Button_ReadState() 会把 SHORT 映射为 PRESSED，
- * 把 LONG 和 LONG_REPEAT 映射为 LONG_PRESSED。
  */
 typedef enum
 {
@@ -75,34 +72,31 @@ typedef enum
  */
 typedef struct
 {
-    uint16_t press_down_count;       // 按下边沿次数
-    uint16_t short_press_count;      // 短按生成次数（松手时确认）
-    uint16_t long_press_count;       // 长按首次触发次数
-    uint16_t long_repeat_count;      // 长按重复触发次数
+    uint16_t press_down_count;  // 按下边沿次数
+    uint16_t short_press_count; // 短按生成次数（松手时确认）
+    uint16_t long_press_count;  // 长按首次触发次数
+    uint16_t long_repeat_count; // 长按重复触发次数
 
-    uint16_t consumed_short_count;   // 短按消费次数
-    uint16_t consumed_long_count;    // 长按首次触发消费次数
-    uint16_t consumed_repeat_count;  // 长按重复触发消费次数
+    uint16_t consumed_short_count;  // 短按消费次数
+    uint16_t consumed_long_count;   // 长按首次触发消费次数
+    uint16_t consumed_repeat_count; // 长按重复触发消费次数
 
-    uint16_t pending_short_count;    // 未消费短按次数
-    uint16_t pending_long_count;     // 未消费长按首次触发次数
-    uint16_t pending_repeat_count;   // 未消费长按重复触发次数
+    uint16_t pending_short_count;  // 未消费短按次数
+    uint16_t pending_long_count;   // 未消费长按首次触发次数
+    uint16_t pending_repeat_count; // 未消费长按重复触发次数
 
-    uint16_t press_time_ms;          // 当前持续按下时间
-    uint16_t repeat_time_ms;         // 当前长按重复计时
-    ButtonState_t physical_state;    // 当前扫描到的物理状态
-    ButtonState_t legacy_state;      // 兼容旧接口的下一事件状态
-    bool is_pressed;                 // 当前物理上是否按下
-    bool long_reported;              // 本次按下是否已触发过长按
+    uint16_t press_time_ms;       // 当前持续按下时间
+    uint16_t repeat_time_ms;      // 当前长按重复计时
+    ButtonState_t physical_state; /* 当前扫描到的物理状态 */
+    bool is_pressed;              /* 当前物理上是否按下 */
+    bool long_reported;           // 本次按下是否已触发过长按
 } USER_LBB_ButtonStats_t;
 
 // 外部变量声明
 extern uint16_t led_countdown[LED_COUNT];
 extern uint16_t buzzer_countdown;
-extern uint8_t button_state[BUTTON_COUNT];
-extern uint8_t button_state_old[BUTTON_COUNT];
-extern uint16_t button_press_time[BUTTON_COUNT];  // 按键按下持续时间
-extern uint16_t button_repeat_time[BUTTON_COUNT]; // 长按重复计时
+extern uint16_t button_press_time[BUTTON_COUNT];  /* 按键按下持续时间 */
+extern uint16_t button_repeat_time[BUTTON_COUNT]; /* 长按重复计时 */
 
 /// @brief 初始化LED、蜂鸣器和按钮
 /// @details 该函数会初始化LED、蜂鸣器和按钮的GPIO端口，并设置初始状态
@@ -147,13 +141,13 @@ static inline void USER_LBB_Buzzer_Off(void)
     buzzer_countdown = 0;
 }
 
-/// @brief 获取指定按钮的当前状态（兼容旧接口，读取后消费一个事件）
-/// @param button 按钮编号（使用Button_t枚举）
-/// @return 按钮状态：RELEASED(无事件), PRESSED(短按), LONG_PRESSED(长按或长按重复)
-ButtonState_t USER_LBB_Button_ReadState(Button_t button);
-
-/// @brief 消费一个按钮事件。
-/// @details 消费优先级：LONG -> LONG_REPEAT -> SHORT。
+/**
+ * @brief 消费一个按钮事件。
+ * @details 消费优先级：LONG → LONG_REPEAT → SHORT。
+ *          调用后对应事件的 pending 计数减一。
+ * @param button 按钮枚举值。
+ * @return 事件类型；无事件时返回 USER_LBB_BUTTON_EVENT_NONE。
+ */
 USER_LBB_ButtonEvent_t USER_LBB_Button_ConsumeEvent(Button_t button);
 
 /// @brief 获取未消费短按次数。

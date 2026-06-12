@@ -1,6 +1,14 @@
+/**
+ * @file userlib_modbus.c
+ * @brief Modbus RTU 从机协议栈。
+ *
+ * 支持标准 Modbus 功能码：读保持寄存器、写单寄存器、写多寄存器。
+ * 含 CRC16 校验、帧超时检测和通信状态管理。
+ */
+
 #include "userlib_modbus.h"
 
-// 采用标准Modbus协议，支持读取和设置单独寄存器、读取和设置多个寄存器功能
+/* 采用标准Modbus协议，支持读取和设置单独寄存器、读取和设置多个寄存器功能 */
 
 #define MODBUS_FRAME_MIN_LENGTH 6 // Modbus最小帧长度
 #define TX_BUF_SIZE 100           // 串口发送缓冲区大小

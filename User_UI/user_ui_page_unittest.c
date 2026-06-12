@@ -1,11 +1,25 @@
+/**
+ * @file user_ui_page_unittest.c
+ * @brief UnitTest 页面 — 测试项列表选择与状态显示。
+ *
+ * 通过注册表 on_key() 回调处理 UP/DOWN 选择和 ENTER 执行。
+ * 硬件操作委托给 user_ui_unittest_actions 层，UI 页面仅负责列表渲染。
+ */
+
 #include "user_ui_internal.h"
 #include "user_ui_unittest_actions.h"
 
+/** @brief OLED 可见行数（第 1~6 行，第 7 行为状态栏） */
 #define UI_UNITTEST_VISIBLE_ROWS 6u
 
+/** @brief 当前高亮选中项索引 */
 static uint8_t unittest_selected_index = 0u;
+/** @brief 滚动窗口顶部索引 */
 static uint8_t unittest_scroll_top = 0u;
 
+/**
+ * @brief 根据选中项位置自动调整滚动窗口，确保选中项始终可见。
+ */
 static void USER_UI_UnitTest_ClampScroll(void)
 {
     uint8_t item_count = USER_UI_UT_Action_GetItemCount();
@@ -26,6 +40,9 @@ static void USER_UI_UnitTest_ClampScroll(void)
     }
 }
 
+/**
+ * @brief UnitTest 页面按键处理 — UP/DOWN 移动选择，ENTER 执行当前测试项。
+ */
 void USER_UI_UnitTestOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
     uint8_t item_count = USER_UI_UT_Action_GetItemCount();
@@ -63,6 +80,9 @@ void USER_UI_UnitTestOnKey(Button_t key, USER_UI_KeyEvent_t event)
     }
 }
 
+/**
+ * @brief 绘制 UnitTest 页面静态布局（操作提示 + 空列表占位 + 状态栏）。
+ */
 void USER_UI_ShowUnitTestStatic(void)
 {
     USER_OLED_putString(1u, 0u, "UP/DN SEL ENTER RUN", 21u);
@@ -74,6 +94,11 @@ void USER_UI_ShowUnitTestStatic(void)
     USER_OLED_putString(7u, 0u, "Ready                ", 21u);
 }
 
+/**
+ * @brief UnitTest 页面动态刷新 — 重绘全部可见行（列表项 + 状态栏）。
+ *
+ * @note 与逐行轮询页面不同，本页每帧重绘全部 6 行以保证选中高亮即时更新。
+ */
 void USER_UI_ShowUnitTestDynamic(void)
 {
     uint8_t row;

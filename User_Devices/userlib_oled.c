@@ -142,35 +142,79 @@ static void __User_OLED_Delay(uint16_t ms)
   delay_cycles((uint32_t)CLK_PER_MS * ms);
 }
 
+/**
+ * @brief 硬件初始化：使能 SPI 中断。
+ *
+ * @note 本函数在 USER_OLED_Init() 中调用，仅使能 SPI 对应 NVIC 中断线，
+ *       不涉及 SPI 外设时钟或 GPIO 配置（这些由 SysConfig 生成代码处理）。
+ */
 static void __User_OLED_HW_Init(void)
 {
   NVIC_EnableIRQ(SPI_1_INST_INT_IRQN);
 }
 
+/**
+ * @brief 硬件反初始化（预留）。
+ *
+ * @note 当前实现为空，预留用于未来关闭 SPI 中断或释放 GPIO 资源。
+ */
 static void __User_OLED_HW_DeInit(void)
 {
 }
 
+/**
+ * @brief 设置 SPI 传输模式为数据（DC 引脚拉高）。
+ *
+ * @note OLED DC 引脚高电平表示接下来 SPI 发送的是显示数据（GRAM 内容），
+ *       低电平表示发送的是命令。本函数在 DMA 连续刷新前调用。
+ */
 static void __User_OLED_SetTxMode_Data(void)
 {
   DL_GPIO_setPins(SPI1_DC_GPIO_Port, SPI1_DC_Pin);
 }
 
+/**
+ * @brief 设置 SPI 传输模式为命令（DC 引脚拉低）。
+ *
+ * @note OLED DC 引脚低电平表示接下来 SPI 发送的是命令字节。
+ *       所有 SSD1306 命令（对比度、显示开关、扫描方向等）发送前均需调用本函数。
+ */
 static void __User_OLED_SetTxMode_Cmd(void)
 {
   DL_GPIO_clearPins(SPI1_DC_GPIO_Port, SPI1_DC_Pin);
 }
 
+/**
+ * @brief 释放 OLED 复位引脚（NRST 拉高，正常工作状态）。
+ *
+ * @note NRST 高电平使 OLED 退出复位，进入正常工作模式。
+ *       初始化序列中与 __User_OLED_GoReset() 配合完成硬件复位。
+ */
 static void __User_OLED_GoNormal(void)
 {
   DL_GPIO_setPins(SPI1_NRST_GPIO_Port, SPI1_NRST_Pin);
 }
 
+/**
+ * @brief 拉低 OLED 复位引脚（NRST 拉低，复位状态）。
+ *
+ * @note NRST 低电平使 OLED 进入硬件复位，内部寄存器恢复默认值。
+ */
 static void __User_OLED_GoReset(void)
 {
   DL_GPIO_clearPins(SPI1_NRST_GPIO_Port, SPI1_NRST_Pin);
 }
 
+/**
+ * @brief SPI DMA 发送：禁用旧通道后重新配置源/目标/大小并启动。
+ *
+ * @param pdat 指向发送数据缓冲区的指针。
+ * @param size 本次 DMA 传输的字节数。
+ *
+ * @note 每次调用前先禁用 DMA 通道（若已使能），再重新配置源地址、
+ *       目标地址（SPI TXDATA 寄存器）和传输大小，最后使能通道。
+ *       用于 GRAM 全帧（1024 字节）连续 DMA 刷新。
+ */
 static void __User_OLED_SPI_Transmit_DMA(uint8_t *pdat, uint16_t size)
 {
   if (DL_DMA_isChannelEnabled(DMA, SPI1_DMA_CH))
@@ -184,6 +228,16 @@ static void __User_OLED_SPI_Transmit_DMA(uint8_t *pdat, uint16_t size)
   DL_DMA_enableChannel(DMA, SPI1_DMA_CH);
 }
 
+/**
+ * @brief SPI 阻塞发送单个字节并延时等待。
+ *
+ * @param pdat   指向待发送数据的指针（实际只发送首字节）。
+ * @param size   未使用（保留参数，兼容 DMA 发送接口）。
+ * @param timeout 发送后阻塞延时，单位 ms。
+ *
+ * @note 本函数用于 OLED 初始化阶段逐字节发送命令，要求阻塞等待以保证
+ *       命令时序。正常刷新使用 DMA 方式（__User_OLED_SPI_Transmit_DMA）。
+ */
 static void __User_OLED_SPI_Transmit(uint8_t *pdat, uint16_t size, uint16_t timeout)
 {
   (void)size;
@@ -191,6 +245,14 @@ static void __User_OLED_SPI_Transmit(uint8_t *pdat, uint16_t size, uint16_t time
   __User_OLED_Delay(timeout);
 }
 
+/**
+ * @brief 通过 SPI 发送一个命令/数据字节。
+ *
+ * @param data 要发送的字节（SSD1306 命令码或显示数据）。
+ *
+ * @note 本函数是 SPI 阻塞发送的薄封装，固定 10ms 超时。
+ *       调用前需先通过 __User_OLED_SetTxMode_Cmd/Data 设置 DC 引脚电平。
+ */
 static void __User_OLED_Send(uint8_t data)
 {
   __User_OLED_SPI_Transmit(&data, 1u, 10u);
@@ -216,6 +278,16 @@ static inline uint8_t USER_OLED_MakePointMask(uint8_t y)
   return (uint8_t)(0x80u >> (y & 0x07u));
 }
 
+/**
+ * @brief 生成页内连续位掩码（bit_start ~ bit_end 范围内的像素点亮）。
+ *
+ * @param bit_start 起始位（0~7，0 = MSB，对应页内顶部像素）。
+ * @param bit_end   结束位（0~7，>= bit_start）。
+ *
+ * @return 页内连续位掩码，bit_start 到 bit_end 对应位为 1，其余为 0。
+ *
+ * @note 用于垂直线和矩形填充中，跨页边界时分别计算各页掩码。
+ */
 static inline uint8_t USER_OLED_MakeYMask(uint8_t bit_start, uint8_t bit_end)
 {
   uint8_t mask = 0u;
@@ -226,16 +298,42 @@ static inline uint8_t USER_OLED_MakeYMask(uint8_t bit_start, uint8_t bit_end)
   return mask;
 }
 
+/**
+ * @brief 快速设置点（无边界检查，直接写入 GRAM）。
+ *
+ * @param x 像素 X 坐标，调用者保证已完成边界检查。
+ * @param y 像素 Y 坐标，调用者保证已完成边界检查。
+ *
+ * @note 直接操作 GRAM[row][x]，不做任何边界裁剪。
+ *       适合已被上层 API 验证坐标的内部路径使用。
+ */
 static inline void USER_OLED_SetPointFast(uint8_t x, uint8_t y)
 {
   GRAM[7u - (y >> 3)][x] |= USER_OLED_MakePointMask(y);
 }
 
+/**
+ * @brief 快速清除点（无边界检查，直接写入 GRAM）。
+ *
+ * @param x 像素 X 坐标，调用者保证已完成边界检查。
+ * @param y 像素 Y 坐标，调用者保证已完成边界检查。
+ *
+ * @note 直接清除 GRAM[row][x] 中对应位，不做任何边界裁剪。
+ */
 static inline void USER_OLED_ResetPointFast(uint8_t x, uint8_t y)
 {
   GRAM[7u - (y >> 3)][x] &= (uint8_t)(~USER_OLED_MakePointMask(y));
 }
 
+/**
+ * @brief 带边界裁剪的点设置（越界则忽略）。
+ *
+ * @param x 像素 X 坐标（支持负值越界裁剪）。
+ * @param y 像素 Y 坐标（支持负值越界裁剪）。
+ *
+ * @note 使用 int16_t 参数支持 Bresenham / 圆形算法中可能产生的负坐标，
+ *       自动过滤越界像素，确保 GRAM 不会被越界写入。
+ */
 static inline void USER_OLED_SetPointClipped(int16_t x, int16_t y)
 {
   if ((x >= 0) && (x < (int16_t)OLED_WIDTH) && (y >= 0) && (y < (int16_t)OLED_HEIGHT))
@@ -274,6 +372,16 @@ static inline void USER_OLED_DrawHLineFast(uint8_t x1, uint8_t x2, uint8_t y)
   }
 }
 
+/**
+ * @brief 带边界裁剪的水平线绘制（越界自动截断，自动交换坐标）。
+ *
+ * @param x1 起点 X 坐标，支持任意顺序（自动交换）。
+ * @param x2 终点 X 坐标，支持任意顺序（自动交换）。
+ * @param y  水平线所在 Y 坐标。
+ *
+ * @note 越界部分自动截断至屏幕范围，完全在屏幕外的线段直接返回。
+ *       被 USER_OLED_DrawCircle(fill=true) 等填充路径复用。
+ */
 static void USER_OLED_DrawHLineClipped(int16_t x1, int16_t x2, int16_t y)
 {
   if ((y < 0) || (y >= (int16_t)OLED_HEIGHT))
@@ -301,6 +409,16 @@ static void USER_OLED_DrawHLineClipped(int16_t x1, int16_t x2, int16_t y)
   USER_OLED_DrawHLineFast((uint8_t)x1, (uint8_t)x2, (uint8_t)y);
 }
 
+/**
+ * @brief 快速绘制垂直线（无边界检查）。
+ *
+ * @param x  垂直线所在 X 坐标，调用者保证已完成边界检查。
+ * @param y1 起点 Y 坐标，调用者保证已完成边界检查且 y1 <= y2。
+ * @param y2 终点 Y 坐标，调用者保证已完成边界检查且 y1 <= y2。
+ *
+ * @note 直接操作 GRAM，按页遍历，自动处理跨页边界的掩码分段。
+ *       适合被矩形边框绘制路径复用。
+ */
 static inline void USER_OLED_DrawVLineFast(uint8_t x, uint8_t y1, uint8_t y2)
 {
   const uint8_t page_start = (uint8_t)(y1 >> 3);
@@ -315,6 +433,17 @@ static inline void USER_OLED_DrawVLineFast(uint8_t x, uint8_t y1, uint8_t y2)
   }
 }
 
+/**
+ * @brief 快速填充矩形（无边界检查）。
+ *
+ * @param x1 左上角 X 坐标，调用者保证已完成边界检查且 x1 <= x2。
+ * @param y1 左上角 Y 坐标，调用者保证已完成边界检查且 y1 <= y2。
+ * @param x2 右下角 X 坐标，调用者保证已完成边界检查且 x1 <= x2。
+ * @param y2 右下角 Y 坐标，调用者保证已完成边界检查且 y1 <= y2。
+ *
+ * @note 直接操作 GRAM，按页遍历填充。当页内掩码为 0xFF 时使用 memset
+ *       批量填充以提升性能，否则逐列 OR 写入掩码。
+ */
 static inline void USER_OLED_FillRectFast(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2)
 {
   const uint16_t width = (uint16_t)x2 - (uint16_t)x1 + 1u;
@@ -352,6 +481,22 @@ static inline void USER_OLED_FillRectFast(uint8_t x1, uint8_t y1, uint8_t x2, ui
  *   4. 清空 GRAM / WaveRAM 缓冲区
  *   5. 开启显示并启动 DMA 连续刷新
  *===========================================================================*/
+/**
+ * @brief OLED 初始化：硬件配置 → 复位 → SSD1306 命令序列 → 清屏 → DMA 刷新。
+ *
+ * @return OLED_Status_t
+ * @retval OLED_OK         初始化成功。
+ * @retval OLED_ERROR_INIT 已初始化，重复调用返回错误。
+ *
+ * @note 初始化步骤：
+ *       1. 使能 SPI NVIC 中断；
+ *       2. NRST 引脚 H→L→H 硬件复位（10ms / 10ms / 200ms 延时）；
+ *       3. 发送 SSD1306 初始化命令（电荷泵、对比度、扫描方向、时钟等）；
+ *       4. 清零 GRAM / WaveRAM 缓冲区；
+ *       5. 开启显示并启动 1024 字节 DMA 连续刷新。
+ *
+ * @warning 本函数不可重入，重复调用返回 OLED_ERROR_INIT。
+ */
 OLED_Status_t USER_OLED_Init(void)
 {
   if (isOLED_Initialized)
@@ -435,6 +580,16 @@ OLED_Status_t USER_OLED_Init(void)
  * OLED 反初始化
  *===========================================================================*/
 
+/**
+ * @brief OLED 反初始化：停止 DMA 刷新并清理状态。
+ *
+ * @return OLED_Status_t
+ * @retval OLED_OK         反初始化成功。
+ * @retval OLED_ERROR_INIT 尚未初始化，无需反初始化。
+ *
+ * @note 调用后 isOLED_AtWork 清零，SPI ISR 不再触发新一轮 DMA。
+ *       当前不关闭 SPI 外设时钟（__User_OLED_HW_DeInit 预留）。
+ */
 OLED_Status_t USER_OLED_DeInit(void)
 {
   if (!isOLED_Initialized)
@@ -451,12 +606,25 @@ OLED_Status_t USER_OLED_DeInit(void)
  * 屏幕缓冲区操作：清屏 / 清行
  *===========================================================================*/
 
+/**
+ * @brief 清屏：将 GRAM 和 WaveRAM 全部清零。
+ *
+ * @note 调用后整个屏幕变为全黑，波形缓冲区同步清空。
+ *       DMA 会在下一轮自动将清零后的 GRAM 发送至 OLED。
+ */
 void USER_OLED_CleanScreen(void)
 {
   memset(&GRAM[0][0], 0x00, sizeof(GRAM));
   memset(WaveRAM, 0x00, sizeof(WaveRAM));
 }
 
+/**
+ * @brief 清除指定行（页）的 GRAM 内容。
+ *
+ * @param row 页号（0~7），越界则忽略。
+ *
+ * @note 仅清零 GRAM 对应页的 128 字节，不影响 WaveRAM 和其他页。
+ */
 void USER_OLED_CleanRow(uint8_t row)
 {
   if (row < OLED_PAGE_COUNT)
@@ -473,6 +641,17 @@ void USER_OLED_CleanRow(uint8_t row)
  * 越界字符回退为空格 (index=32)。
  *===========================================================================*/
 
+/**
+ * @brief 在指定位置显示字符串（6×8 ASCII 字库）。
+ *
+ * @param row    页号（0~7），越界则忽略。
+ * @param column 字符列（0~20），越界则忽略。
+ * @param str    指向源字符串的指针，为 NULL 则忽略。
+ * @param length 要显示的字符数，为 0 则忽略。
+ *
+ * @note 每个字符宽 6 像素，超出屏幕右边界自动截断。
+ *       越界字符（>= USER_FONT_ASCII_6X8_COUNT）回退显示空格。
+ */
 void USER_OLED_putString(uint8_t row, uint8_t column, const char *str, uint8_t length)
 {
   if ((row >= OLED_PAGE_COUNT) || (column >= OLED_CHARS_PER_ROW) || (str == NULL) || (length == 0u))
@@ -495,6 +674,15 @@ void USER_OLED_putString(uint8_t row, uint8_t column, const char *str, uint8_t l
   }
 }
 
+/**
+ * @brief 在指定位置显示单个字符（6×8 ASCII 字库）。
+ *
+ * @param row    页号（0~7），越界则忽略。
+ * @param column 字符列（0~20），越界则忽略。
+ * @param ch     要显示的 ASCII 字符。
+ *
+ * @note 越界字符回退显示空格，直接 memcpy 6 字节字模到 GRAM。
+ */
 void USER_OLED_putChar(uint8_t row, uint8_t column, char ch)
 {
   if ((row >= OLED_PAGE_COUNT) || (column >= OLED_CHARS_PER_ROW))
@@ -516,6 +704,21 @@ void USER_OLED_putChar(uint8_t row, uint8_t column, char ch)
  * 用作 putX16 / putUI16 / putI16 / putFloat 的底层格式化引擎。
  *===========================================================================*/
 
+/**
+ * @brief 无符号整数→右对齐字符串（内部格式化引擎）。
+ *
+ * @param num   待转换的无符号 16 位整数。
+ * @param radix 进制（支持 2 / 10 / 16）。
+ * @param str   输出缓冲区指针。
+ * @param len   输出字符串长度（不含结尾 '\0'）。
+ * @param fill  填充字符（左端不足时填充）。
+ *
+ * @return true  转换成功。
+ * @return false 参数无效或结果超出 len 宽度。
+ *
+ * @note 用作 putX16 / putUI16 / putI16 / putFloat 的底层格式化引擎。
+ *       输出字符串以 '\0' 结尾，调用者需保证 str 至少有 len+1 字节。
+ */
 static bool USER_OLED_U16ToStr(uint16_t num, uint8_t radix, uint8_t *str, uint8_t len, char fill)
 {
   if ((str == NULL) || (len == 0u) || (len > 17u) || ((radix != 2u) && (radix != 10u) && (radix != 16u)))
@@ -560,6 +763,14 @@ static bool USER_OLED_U16ToStr(uint16_t num, uint8_t radix, uint8_t *str, uint8_
   return true;
 }
 
+/**
+ * @brief 在指定位置以十六进制格式显示 16 位无符号整数。
+ *
+ * @param row    页号（0~7）。
+ * @param column 字符列（0~20）。
+ * @param number 待显示的 16 位无符号整数（0~65535）。
+ * @param length 显示宽度（1~4 字符），左端补 '0'。
+ */
 void USER_OLED_putX16(uint8_t row, uint8_t column, uint16_t number, uint8_t length)
 {
   if (USER_OLED_U16ToStr(number, 16u, (uint8_t *)str_temp, length, '0'))
@@ -568,6 +779,14 @@ void USER_OLED_putX16(uint8_t row, uint8_t column, uint16_t number, uint8_t leng
   }
 }
 
+/**
+ * @brief 在指定位置以十进制格式显示 16 位无符号整数。
+ *
+ * @param row    页号（0~7）。
+ * @param column 字符列（0~20）。
+ * @param number 待显示的 16 位无符号整数（0~65535）。
+ * @param length 显示宽度（1~5 字符），左端补空格。
+ */
 void USER_OLED_putUI16(uint8_t row, uint8_t column, uint16_t number, uint8_t length)
 {
   if (USER_OLED_U16ToStr(number, 10u, (uint8_t *)str_temp, length, ' '))
@@ -576,6 +795,17 @@ void USER_OLED_putUI16(uint8_t row, uint8_t column, uint16_t number, uint8_t len
   }
 }
 
+/**
+ * @brief 在指定位置以十进制格式显示 16 位有符号整数。
+ *
+ * @param row    页号（0~7）。
+ * @param column 字符列（0~20）。
+ * @param number 待显示的 16 位有符号整数（-32768~32767）。
+ * @param length 显示宽度（2~6 字符，含符号位），左端补空格。
+ *
+ * @note 负数时符号位占 1 字符，若 length < 2 则忽略显示。
+ *       INT16_MIN 特殊处理绝对值以避免溢出。
+ */
 void USER_OLED_putI16(uint8_t row, uint8_t column, int16_t number, uint8_t length)
 {
   if ((length == 0u) || (length > 6u))
@@ -606,6 +836,18 @@ void USER_OLED_putI16(uint8_t row, uint8_t column, int16_t number, uint8_t lengt
   }
 }
 
+/**
+ * @brief 在指定位置以浮点数格式显示数值。
+ *
+ * @param row          页号（0~7）。
+ * @param column       字符列（0~20）。
+ * @param number       待显示的浮点数。
+ * @param int_length   整数部分显示宽度（1~6 字符），左端补空格。
+ * @param float_length 小数部分显示宽度（1~4 字符），右端补 '0'。
+ *
+ * @note 自动处理 NaN（显示 "NaN"）、±Inf（显示 "Inf" / "-Inf"）。
+ *       小数部分四舍五入到指定位数，总宽度 = int_length + float_length + 1（小数点）。
+ */
 void USER_OLED_putFloat(uint8_t row, uint8_t column, float number, uint8_t int_length, uint8_t float_length)
 {
   if ((int_length == 0u) || (int_length > 6u) || (float_length == 0u) || (float_length > 4u))
@@ -683,6 +925,14 @@ void USER_OLED_putFloat(uint8_t row, uint8_t column, float number, uint8_t int_l
  * 所有公开点操作均带边界检查，内部调用 Fast 版本完成实际写入。
  *===========================================================================*/
 
+/**
+ * @brief 在指定位置绘制点（公开 API，带边界检查）。
+ *
+ * @param x X 坐标（0~127），越界则忽略。
+ * @param y Y 坐标（0~63），越界则忽略。
+ *
+ * @note 边界内调用 USER_OLED_SetPointFast 直接写入 GRAM。
+ */
 void USER_OLED_SetPoint(uint8_t x, uint8_t y)
 {
   if ((x < OLED_WIDTH) && (y < OLED_HEIGHT))
@@ -691,6 +941,14 @@ void USER_OLED_SetPoint(uint8_t x, uint8_t y)
   }
 }
 
+/**
+ * @brief 在指定位置清除点（公开 API，带边界检查）。
+ *
+ * @param x X 坐标（0~127），越界则忽略。
+ * @param y Y 坐标（0~63），越界则忽略。
+ *
+ * @note 边界内调用 USER_OLED_ResetPointFast 直接清除 GRAM 对应位。
+ */
 void USER_OLED_ResetPoint(uint8_t x, uint8_t y)
 {
   if ((x < OLED_WIDTH) && (y < OLED_HEIGHT))
@@ -706,6 +964,15 @@ void USER_OLED_ResetPoint(uint8_t x, uint8_t y)
  * 斜线使用 Bresenham 算法。
  *===========================================================================*/
 
+/**
+ * @brief 绘制水平线（公开 API，带边界检查，自动交换坐标）。
+ *
+ * @param x1 起点 X 坐标（0~127），越界则忽略整条线。
+ * @param x2 终点 X 坐标（0~127），越界则忽略整条线。
+ * @param y  Y 坐标（0~63），越界则忽略整条线。
+ *
+ * @note 若 x1 > x2 自动交换，内部调用 USER_OLED_DrawHLineFast。
+ */
 void USER_OLED_DrawHLine(uint8_t x1, uint8_t x2, uint8_t y)
 {
   if ((x1 >= OLED_WIDTH) || (x2 >= OLED_WIDTH) || (y >= OLED_HEIGHT))
@@ -721,6 +988,15 @@ void USER_OLED_DrawHLine(uint8_t x1, uint8_t x2, uint8_t y)
   USER_OLED_DrawHLineFast(x1, x2, y);
 }
 
+/**
+ * @brief 绘制垂直线（公开 API，带边界检查，自动交换坐标）。
+ *
+ * @param x  X 坐标（0~127），越界则忽略整条线。
+ * @param y1 起点 Y 坐标（0~63），越界则忽略整条线。
+ * @param y2 终点 Y 坐标（0~63），越界则忽略整条线。
+ *
+ * @note 若 y1 > y2 自动交换，内部调用 USER_OLED_DrawVLineFast。
+ */
 void USER_OLED_DrawVLine(uint8_t x, uint8_t y1, uint8_t y2)
 {
   if ((x >= OLED_WIDTH) || (y1 >= OLED_HEIGHT) || (y2 >= OLED_HEIGHT))
@@ -736,6 +1012,17 @@ void USER_OLED_DrawVLine(uint8_t x, uint8_t y1, uint8_t y2)
   USER_OLED_DrawVLineFast(x, y1, y2);
 }
 
+/**
+ * @brief 绘制任意斜线（公开 API，Bresenham 算法）。
+ *
+ * @param x1 起点 X 坐标（0~127），越界则忽略。
+ * @param y1 起点 Y 坐标（0~63），越界则忽略。
+ * @param x2 终点 X 坐标（0~127），越界则忽略。
+ * @param y2 终点 Y 坐标（0~63），越界则忽略。
+ *
+ * @note 水平和垂直线自动退化到对应的专用绘制函数。
+ *       单点（x1==x2 && y1==y2）直接调用 SetPointFast。
+ */
 void USER_OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2)
 {
   if ((x1 >= OLED_WIDTH) || (x2 >= OLED_WIDTH) || (y1 >= OLED_HEIGHT) || (y2 >= OLED_HEIGHT))
@@ -787,6 +1074,18 @@ void USER_OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2)
   }
 }
 
+/**
+ * @brief 绘制虚线（公开 API，Bresenham 算法 + 点线模式）。
+ *
+ * @param x1          起点 X 坐标（0~127），越界则忽略。
+ * @param y1          起点 Y 坐标（0~63），越界则忽略。
+ * @param x2          终点 X 坐标（0~127），越界则忽略。
+ * @param y2          终点 Y 坐标（0~63），越界则忽略。
+ * @param dash_length 每段实线像素数，为 0 则忽略。
+ * @param gap_length  每段间隙像素数，为 0 则忽略。
+ *
+ * @note 使用 count % (dash_length + gap_length) 判断当前像素属于实线还是间隙。
+ */
 void USER_OLED_DrawDashedLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t dash_length, uint8_t gap_length)
 {
   if ((x1 >= OLED_WIDTH) || (x2 >= OLED_WIDTH) || (y1 >= OLED_HEIGHT) || (y2 >= OLED_HEIGHT) || (dash_length == 0u) || (gap_length == 0u))
@@ -836,6 +1135,18 @@ void USER_OLED_DrawDashedLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, ui
  * 圆弧通过 atan2 角度判断在指定角度区间内的像素。
  *===========================================================================*/
 
+/**
+ * @brief 绘制矩形（公开 API，支持填充与边框模式）。
+ *
+ * @param x1   左上角 X 坐标（0~127），越界则忽略。
+ * @param y1   左上角 Y 坐标（0~63），越界则忽略。
+ * @param x2   右下角 X 坐标（0~127），越界则忽略。
+ * @param y2   右下角 Y 坐标（0~63），越界则忽略。
+ * @param fill true = 填充矩形，false = 仅绘制边框。
+ *
+ * @note 坐标自动排序（x1<=x2, y1<=y2）。
+ *       填充模式调用 USER_OLED_FillRectFast，边框模式用 4 条线段组合。
+ */
 void USER_OLED_DrawRect(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, bool fill)
 {
   if ((x1 >= OLED_WIDTH) || (x2 >= OLED_WIDTH) || (y1 >= OLED_HEIGHT) || (y2 >= OLED_HEIGHT))
@@ -868,6 +1179,17 @@ void USER_OLED_DrawRect(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, bool fil
   }
 }
 
+/**
+ * @brief 绘制圆形（公开 API，中点画圆算法，支持填充与边框模式）。
+ *
+ * @param x0     圆心 X 坐标（0~127），越界则忽略。
+ * @param y0     圆心 Y 坐标（0~63），越界则忽略。
+ * @param radius 半径（1~63），为 0 则忽略。
+ * @param fill   true = 填充圆，false = 仅绘制圆周。
+ *
+ * @note 填充模式下使用水平扫描线填充（USER_OLED_DrawHLineClipped），
+ *       自动处理越界裁剪，避免圆超出屏幕时产生错误。
+ */
 void USER_OLED_DrawCircle(uint8_t x0, uint8_t y0, uint8_t radius, bool fill)
 {
   if ((x0 >= OLED_WIDTH) || (y0 >= OLED_HEIGHT) || (radius == 0u))
@@ -912,6 +1234,19 @@ void USER_OLED_DrawCircle(uint8_t x0, uint8_t y0, uint8_t radius, bool fill)
   }
 }
 
+/**
+ * @brief 判断角度是否在 [start, end] 区间内（支持跨 0° 边界）。
+ *
+ * @param angle       待判断的角度（0~359 度）。
+ * @param start_angle 起始角度（0~359 度）。
+ * @param end_angle   结束角度（0~359 度）。
+ *
+ * @return true  角度在区间内。
+ * @return false 角度不在区间内。
+ *
+ * @note 当 start_angle > end_angle 时表示区间跨越 0° 边界
+ *       （例如 start=350°, end=10°），此时采用 OR 逻辑判断。
+ */
 static bool USER_OLED_IsAngleInRange(uint16_t angle, uint16_t start_angle, uint16_t end_angle)
 {
   if (start_angle <= end_angle)
@@ -921,6 +1256,18 @@ static bool USER_OLED_IsAngleInRange(uint16_t angle, uint16_t start_angle, uint1
   return (angle >= start_angle) || (angle <= end_angle);
 }
 
+/**
+ * @brief 绘制圆弧（公开 API，中点画圆 + atan2 角度过滤）。
+ *
+ * @param x0          圆心 X 坐标（0~127），越界则忽略。
+ * @param y0          圆心 Y 坐标（0~63），越界则忽略。
+ * @param radius      半径（1~63），为 0 则忽略。
+ * @param start_angle 起始角度（0~359 度，0° = 右，逆时针增加）。
+ * @param end_angle   结束角度（0~359 度，0° = 右，逆时针增加）。
+ *
+ * @note 角度自动对 360 取模，支持跨 0° 边界的区间（如 350°~10°）。
+ *       每像素通过 atan2 计算角度后判断是否在 [start, end] 内。
+ */
 void USER_OLED_DrawArc(uint8_t x0, uint8_t y0, uint8_t radius, uint16_t start_angle, uint16_t end_angle)
 {
   if ((x0 >= OLED_WIDTH) || (y0 >= OLED_HEIGHT) || (radius == 0u))
@@ -1064,14 +1411,12 @@ void USER_OLED_InvertDisplay(bool invert)
   __User_OLED_SetTxMode_Data();
 }
 
-/*===========================================================================
- * SPI0 DMA 传输完成中断服务例程
- *
- * 每次 DMA 传输完 1024 字节 GRAM 后触发。
- * 若 OLED 仍在工作状态（isOLED_AtWork），立即启动下一轮 DMA 传输，
- * 实现 GRAM → OLED 的连续自动刷新。
- *===========================================================================*/
-
+/**
+ * @brief SPI0 DMA 传输完成中断服务例程。
+ * @details 每次 DMA 传输完 1024 字节 GRAM 后触发。
+ *          若 OLED 仍在工作状态（isOLED_AtWork），立即启动下一轮 DMA 传输，
+ *          实现 GRAM → OLED 的连续自动刷新。
+ */
 void SPI0_IRQHandler(void)
 {
   DL_SPI_IIDX itSource = DL_SPI_getPendingInterrupt(SPI0);

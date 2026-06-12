@@ -202,9 +202,11 @@ void USER_Motor_SetMode(MOTOR_Instance_t motor_id, MOTOR_Mode_t mode, int16_t sp
     }
 }
 
-/// @brief 获取电机当前工作模式
-/// @param motor_id 电机ID（MOTOR_0_LEFT 或 MOTOR_1_RIGHT）
-/// @return 当前电机工作模式（MOTOR_Mode_t 枚举值），无效ID返回 MOTOR_MODE_NORMAL_RUN
+/**
+ * @brief 获取电机当前工作模式。
+ * @param motor_id 电机编号 (MOTOR_0_LEFT / MOTOR_1_RIGHT)。
+ * @return 当前电机模式，无效 ID 返回 MOTOR_MODE_NORMAL_RUN。
+ */
 MOTOR_Mode_t USER_Motor_GetMode(MOTOR_Instance_t motor_id)
 {
     switch (motor_id)
@@ -218,8 +220,11 @@ MOTOR_Mode_t USER_Motor_GetMode(MOTOR_Instance_t motor_id)
     }
 }
 
-/// @brief 停止电机
-/// @param motor_id 电机ID，0左电机，1右电机
+/**
+ * @brief 停止指定电机（禁用电机使能引脚，进入滑行状态）。
+ * @param motor_id 电机编号 (MOTOR_0_LEFT / MOTOR_1_RIGHT)。
+ * @note 区别于能量回收制动（REGEN_BRAKE），本函数直接禁用电机驱动芯片。
+ */
 void USER_Motor_Stop(MOTOR_Instance_t motor_id)
 {
     switch (motor_id)

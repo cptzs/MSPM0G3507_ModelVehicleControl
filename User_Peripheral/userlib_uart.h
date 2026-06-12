@@ -9,7 +9,7 @@
 #include <stdbool.h> /* 布尔类型库函数 */
 
 // 用户外设接口头文件
-#include "userlib_sys.h" // 系统时间和SysTick相关函数
+#include "userlib_systick.h" // SysTick驱动接口
 
 /// @brief UART实例枚举
 typedef enum

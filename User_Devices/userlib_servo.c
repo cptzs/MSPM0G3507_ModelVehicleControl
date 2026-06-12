@@ -127,10 +127,15 @@ uint16_t USER_SERVO_CalculatePulseWidth(Servo_Instance servo_index, int16_t rela
     return (uint16_t)pulse_width;
 }
 
-/// @brief 设置舵机角度
-/// @param servo_index 舵机索引，范围为0-3
-/// @param angle 舵机角度，范围为[min_angle, max_angle]
-/// @return bool 设置成功返回true，失败返回false
+/**
+ * @brief 设置舵机角度。
+ * @details 计算脉冲宽度 → 更新比较寄存器 → 通过 CC 中断生成 PWM。
+ *          角度自动限幅到 [min_angle, max_angle]。
+ * @param servo_index 舵机索引 (0–3)。
+ * @param angle 目标角度，范围 [min_angle, max_angle]。
+ * @retval true 设置成功。
+ * @retval false 索引无效或舵机未初始化。
+ */
 bool USER_SERVO_SetAngle(Servo_Instance servo_index, int16_t angle)
 {
     if (servo_index >= 4)

@@ -1,82 +1,112 @@
-# MSPM0G3507 Model Vehicle Control
+﻿# MSPM0G3507 智能小车模型控制系统
 
-基于 TI MSPM0G3507 的两轮模型车控制工程，面向大学生电赛类智能小车开发。当前 `ai_assist` 分支采用分层架构：外设封装、设备驱动、全局数据、统一车辆状态估测、非阻塞运动控制、表格化路线调度、本地 UI，以及 1ms tick 驱动的协作式调度器。
+基于 **TI MSPM0G3507** (ARM Cortex-M0+, 80MHz, 128KB Flash / 32KB SRAM) 的两轮差速模型车控制工程。
 
-## 构建与入口
+当前工程已全面切换到 **注册表驱动 UI 架构 + 非阻塞运动控制**，采用分层设计：
+外设封装 → 设备驱动 → 算法库 → 协作式调度器 → 状态估测 → 非阻塞 MCM → 表格化路线调度 → OLED UI。
 
-- 使用 **IAR Embedded Workbench** 构建和调试：`basic.eww`、`basic.ewp`。
-- MSPM0 外设配置由 SysConfig 维护：`main.syscfg`、`ti_msp_dl_config.c/h`。
-- 命令行 `makefile` 构建入口已移除，后续以 IAR 工程文件为准。
-- 程序入口为 `main.c`。
+## 硬件资源
 
-## 运行流程
+| 资源 | 规格 | 占用 |
+|------|------|------|
+| MCU | MSPM0G3507, Cortex-M0+ @ 80MHz | — |
+| Flash | 128 KB | ~53 KB (42%) |
+| SRAM | 32 KB | ~7 KB (21%) |
+| 编译器 | IAR EWARM 9.70.4 | — |
+| 传感器 | 6轴 IMU (UART)、编码器×3 (GPIO+Timer)、模拟光电×8 (ADC)、LiDAR×4 (CAN) | — |
+| 执行器 | 直流电机×2 (PWM)、舵机×4 (PWM)、LED/蜂鸣器 (GPIO) | — |
+| 显示 | OLED 128×64 (SPI+DMA) | — |
+| 通信 | Modbus 从机 (UART1)、CAN | — |
 
-`main.c` 启动后依次执行：`SYSCFG_DL_init()`、`USER_SYSTEM_Init()`、`USER_OS_Init()`、`USER_GlobalData_Init()`、`USER_Device_Init()`、`USER_STATE_Init()`、`USER_RegisterSchedulerTasks()`，随后在主循环中持续调用 `USER_OS_Run()`。
+## 工程架构
 
-`User_OS` 不是抢占式 RTOS，不做上下文切换，也不分配独立任务栈。所有任务仍运行在 `main` 前台上下文中，任务函数必须短小、非阻塞。
-
-## 当前调度任务
-
-- `global`：1ms，刷新 ADC、电位器、温度、电源电压等全局数据。
-- `lidar`：5ms，维护 LiDAR 通信和数据。
-- `ui`：5ms，处理 OLED、按键和路线启动交互。
-- `state`：10ms，刷新统一车辆状态估计。
-- `mcm`：10ms，执行非阻塞运动控制状态机。
-- `race`：10ms，处理路线请求和动作表调度。
-- `heartbeat`：500ms，LED0 心跳。
-
-任务注册支持周期、offset 错峰和 priority 优先级；priority 数值越小优先级越高。
-
-## 核心模块
-
-- `User_Peripheral/`：ADC、CAN、PWM、UART、系统服务等 MCU 外设封装。
-- `User_Devices/`：LBB、OLED/字库、编码器、IMU、LiDAR、电机、舵机、Modbus、OEMT 光电等设备驱动。
-- `globals.c/h`：集中保存传感器数据、PID 实例、ADC 数据和 Modbus 数据区。
-- `User_OS/user_os.c/h`：1ms 协作式任务调度器。
-- `userapp_state_estimator.c/h`：统一状态估测层，是应用层中唯一直接读取编码器和 IMU 原始数据的模块。
-- `userapp_vehicle_model.h`：车辆几何、编码器和路程计标定参数。
-- `userapp_mcm.c/h`：非阻塞运动控制管理器，当前支持直行/后退和原地旋转。
-- `userapp_race_table.c/h`：表格化路线调度器，只解释动作表并调用 MCM，不直接写电机或传感器。
-- `userapp_race.c/h`：路线启动请求和动作表推进；当前包含模板路线。
-- `user_ui.c/h`：唯一直接操作 OLED、按键、LED、蜂鸣器的应用层模块。
-- `User_Algorithm/`：当前主要提供 PID 控制器。
-
-## 当前控制链路
-
-```text
-编码器 / IMU / ADC / LiDAR 等设备数据
-        ↓
-globals + User_GlobalData_Task
-        ↓
-USER_State_Task 统一状态估测
-        ↓
-USER_MCM_Task 非阻塞运动控制
-        ↓
-速度 PID + userlib_motor 电机输出
+```
+ModelVehicleControl_AI/
+├── main.c                   # 主入口：初始化 → 注册任务 → while(1) 调度循环
+├── globals.c/h              # 全局变量定义（传感器数据/PID/Modbus 寄存器）+ 1ms 全局数据处理
+├── user_config.h            # 编译配置：状态估测方法选择
+├── ti_msp_dl_config.c/h     # SysConfig 自动生成外设配置（不修改）
+├── mspm0g3507.icf           # IAR 链接脚本
+├── basic.ewp / .eww         # IAR 工程文件
+│
+├── ti/driverlib/            # TI MSPM0 SDK 驱动库（不修改）
+├── iar/                     # IAR 启动文件 startup_mspm0g350x_iar.c
+│
+├── User_Peripheral/         # 外设抽象层：ADC、CAN、PWM、SysTick、UART
+├── User_Devices/            # 设备驱动层：编码器、IMU、LBB、LiDAR、Modbus、电机、OEMT、OLED、舵机、字库
+├── User_Algorithm/          # 算法库：PID 控制器（位置式/增量式/高级/斜坡）
+├── User_OS/                 # 1ms tick 协作式调度器
+├── User_Application/        # 应用层：状态估测、MCM、路线调度、车辆模型
+├── User_UI/                 # UI 子系统：注册表驱动 OLED 12 页框架
+│
+├── docs/                    # 设计文档
+└── tools/                   # 辅助脚本
 ```
 
-路线启动链路：
+## 分层数据流
 
-```text
-user_ui 长按 ENTER 蓄力与倒计时
-        ↓
-USER_Race_RequestStart
-        ↓
-USER_Race_Task
-        ↓
-userapp_race_table 动作表
-        ↓
-USER_MCM_StartStraight / USER_MCM_StartSpin
+```
+┌──────────────────────────────────────────────────────────────┐
+│ 传感器原始数据 (encoder_data[] / imu_data / adc_data[] / ...) │
+│                      globals.c 全局存储                       │
+└──────────────────────────┬───────────────────────────────────┘
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│              State Estimator (每 10ms)                        │
+│  唯一读取原始传感器的模块，发布统一 USER_STATE_Estimate_t       │
+│  距离(mm) / 速度(mm/s) / 偏航角(deg) / 角速度(deg/s)          │
+│  → 支持 raw / weighted / complementary / Kalman / EKF 切换    │
+└──────────────────────────┬───────────────────────────────────┘
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│              MCM 非阻塞运动控制 (每 10ms)                      │
+│  消费 Estimate，驱动梯形速度规划 + 航向修正 → 速度 PID → 电机   │
+│  支持直行(STRAIGHT) / 原地旋转(SPIN) / 圆弧(ARC,预留)          │
+└──────────────────────────┬───────────────────────────────────┘
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│              Race 路线调度 (每 10ms)                           │
+│  表格驱动：逐行启动 MCM 动作 → 等待完成 → 跳转下一行            │
+│  模板路线：直行50cm→180°掉头→直行50cm→180°回转                 │
+└──────────────────────────────────────────────────────────────┘
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│              OLED UI (每 5ms)                                 │
+│  12 页注册表驱动，PREV/NEXT 翻页，按键交互                     │
+│  路线启动：ENTER 长按 → 充电 2s → 倒计时 2s → 比赛开始          │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-## 配置项与限制
+## 任务调度表 (协作式 1ms tick)
 
-- `OEMT_SENSOR_MODE`：选择 OEMT 模拟光电或数字光电。两者共享物理接口，不能同时启用。
-- `USER_STATE_DEFAULT_ESTIMATOR`：选择状态估测方法。当前只有 RAW 实际可用，其它方法为预留入口并回落到 RAW。
-- 当前默认初始化全部外部设备，不再通过宏裁剪设备启动逻辑。
-- `USER_MCM_StartArc()` 只是预留接口，当前未实现。
-- 当前模板路线为：直行 500mm、旋转 180°、返回 500mm、再旋转 180°。
+| 任务名 | 周期 | 偏移 | 优先级 | 功能 |
+|--------|------|------|--------|------|
+| `global` | 1ms | 0 | 0 | ADC→电压/温度换算 |
+| `state` | 10ms | 3 | 1 | 车辆状态估测 |
+| `mcm` | 10ms | 4 | 2 | 非阻塞运动控制 |
+| `race` | 10ms | 5 | 3 | 路线调度推进 |
+| `lidar` | 5ms | 1 | 4 | LiDAR 轮询通信 |
+| `ui` | 5ms | 2 | 6 | OLED UI 刷新 |
+| `heartbeat` | 500ms | 0 | 10 | LED 心跳闪烁 |
+
+## 编译
+
+```bash
+& "D:\Program Files\IAR\common\bin\iarbuild.exe" basic.ewp -build Debug -log errors
+```
+
+## 各层详细说明
+
+| 目录 | 说明 |
+|------|------|
+| [User_Peripheral/](User_Peripheral/README.md) | MCU 外设抽象层：ADC、CAN、PWM、SysTick、UART |
+| [User_Devices/](User_Devices/README.md) | 设备驱动层：10 个外接硬件模块驱动 |
+| [User_Algorithm/](User_Algorithm/README.md) | 纯算法库：标准/增量/高级 PID 控制器 |
+| [User_OS/](User_OS/README.md) | 1ms tick 协作式伪 RTOS 调度器 |
+| [User_Application/](User_Application/README.md) | 应用层：状态估测、MCM、路线调度 |
+| [User_UI/](User_UI/README.md) | 注册表驱动 OLED 12 页 UI 框架 |
+| [docs/](docs/) | 设计文档：架构说明、路线表设计、滤波器设计、MCM 状态机方案 |
 
 ## 许可
 
-MIT License。
+MIT License.

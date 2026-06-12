@@ -1,5 +1,14 @@
+/**
+ * @file user_ui_pages.c
+ * @brief UI 页面注册表 — 编译期静态定义全部 12 页的描述符数组。
+ *
+ * 每页包含：页面枚举值、13 字符标题、静态/动态绘制函数指针、按键回调（可为 NULL）。
+ * 注册表顺序决定 PREV/NEXT 导航的循环顺序。
+ */
+
 #include "user_ui_internal.h"
 
+/** @brief 全局页面注册表（12 页，编译期常量） */
 static const USER_UI_PageDef_t ui_page_table[] = {
     {PAGE_MOTOR, "Motor Control", USER_UI_ShowMotorPageStatic, USER_UI_ShowMotorPageDynamic, NULL},
     {PAGE_ENCODER, "Encoder Data ", USER_UI_ShowEncoderPageStatic, USER_UI_ShowEncoderPageDynamic, USER_UI_EncoderOnKey},
@@ -15,16 +24,32 @@ static const USER_UI_PageDef_t ui_page_table[] = {
     {PAGE_UNITTEST, "UnitTest     ", USER_UI_ShowUnitTestStatic, USER_UI_ShowUnitTestDynamic, USER_UI_UnitTestOnKey},
 };
 
+/**
+ * @brief 获取页面注册表首指针。
+ *
+ * @return 指向 ui_page_table[0] 的常量指针。
+ */
 const USER_UI_PageDef_t *USER_UI_GetPageTable(void)
 {
     return ui_page_table;
 }
 
+/**
+ * @brief 获取注册表中的页面总数。
+ *
+ * @return 页面数量（编译期确定，当前为 12）。
+ */
 uint8_t USER_UI_GetPageCount(void)
 {
     return (uint8_t)(sizeof(ui_page_table) / sizeof(ui_page_table[0]));
 }
 
+/**
+ * @brief 按数组索引获取页面描述符。
+ *
+ * @param index 数组索引（0 ~ page_count-1）。
+ * @return 指向页面描述符的指针，越界返回 NULL。
+ */
 const USER_UI_PageDef_t *USER_UI_GetPageByIndex(uint8_t index)
 {
     if (index >= USER_UI_GetPageCount())
@@ -35,6 +60,12 @@ const USER_UI_PageDef_t *USER_UI_GetPageByIndex(uint8_t index)
     return &ui_page_table[index];
 }
 
+/**
+ * @brief 按页面枚举值在注册表中查找页面描述符。
+ *
+ * @param page 目标页面枚举值。
+ * @return 指向页面描述符的指针，未找到返回 NULL。
+ */
 const USER_UI_PageDef_t *USER_UI_FindPage(DisplayPage_t page)
 {
     uint8_t i;

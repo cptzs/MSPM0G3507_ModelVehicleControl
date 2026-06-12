@@ -1,5 +1,15 @@
+/**
+ * @file user_ui_page_route.c
+ * @brief 路线页面 (Template Path) — 赛道图形绘制 + 路线动作预览 + 启动交互。
+ *
+ * 静态内容绘制标准赛道模板图形（双竖线 + 两端半圆 + 方向箭头）。
+ * 动态内容刷新充电进度条、当前动作步骤、超时剩余时间。
+ * ENTER 长按启动充电→倒计时→比赛流程；ESC 短按取消。
+ */
+
 #include "user_ui_internal.h"
 
+/** @brief 赛道图形绘制区域左上角 X */
 #define UI_ROUTE_MAP_X 0u
 #define UI_ROUTE_MAP_Y 0u
 #define UI_ROUTE_MAP_W 60u
@@ -12,6 +22,9 @@
 #define UI_ROUTE_BAR_H 6u
 #define UI_ROUTE_CHARGE_TIME_MS 2000u
 
+/**
+ * @brief 返回 int16_t 的绝对值（uint16_t）。
+ */
 static uint16_t USER_UI_RouteAbsI16(int16_t value)
 {
     if (value < 0)
@@ -22,6 +35,9 @@ static uint16_t USER_UI_RouteAbsI16(int16_t value)
     return (uint16_t)value;
 }
 
+/**
+ * @brief 绘制标准赛道模板图形（双竖线 + 两端半圆 + 方向箭头 + 外框）。
+ */
 static void USER_UI_RouteDrawTemplatePath(void)
 {
     const uint8_t left_x = 10u;
@@ -50,6 +66,11 @@ static void USER_UI_RouteDrawTemplatePath(void)
     USER_OLED_DrawLine(right_x, 42u, (uint8_t)(right_x + 3u), 38u);
 }
 
+/**
+ * @brief 绘制路线启动充电进度条。
+ *
+ * @param percent 进度百分比（0~100）。
+ */
 static void USER_UI_RouteDrawProgressBar(uint8_t percent)
 {
     uint8_t fill_w;
@@ -77,6 +98,14 @@ static void USER_UI_RouteDrawProgressBar(uint8_t percent)
     }
 }
 
+/**
+ * @brief 格式化路线动作步骤文本（S01 FW 100 / S02 TR 90 等）。
+ *
+ * @param action_ptr 指向当前动作的指针，NULL 表示 IDLE。
+ * @param step_index 步骤索引（-1 表示无动作）。
+ * @param out_buf    输出缓冲区。
+ * @param out_len    输出缓冲区长度。
+ */
 static void USER_UI_RouteFormatStepText(const USER_Race_Action_t *action_ptr,
                                         int16_t step_index,
                                         char *out_buf,
@@ -143,6 +172,15 @@ static void USER_UI_RouteFormatStepText(const USER_Race_Action_t *action_ptr,
     }
 }
 
+/**
+ * @brief 获取当前应显示的动作信息（优先比赛动作，其次模板预览）。
+ *
+ * @param[out] action_ptr        当前动作描述。
+ * @param[out] step_index_ptr    步骤索引。
+ * @param[out] timeout_remain_ptr 超时剩余时间 (ms)。
+ * @return true  有可显示的动作。
+ * @return false 无动作（IDLE 状态）。
+ */
 static bool USER_UI_RouteGetDisplayAction(USER_Race_Action_t *action_ptr,
                                           int16_t *step_index_ptr,
                                           uint32_t *timeout_remain_ptr)
@@ -168,6 +206,9 @@ static bool USER_UI_RouteGetDisplayAction(USER_Race_Action_t *action_ptr,
     return false;
 }
 
+/**
+ * @brief 绘制路线页面静态内容（赛道图形 + 信息标签）。
+ */
 void USER_UI_ShowRouteStatic(void)
 {
     USER_UI_RouteDrawTemplatePath();
@@ -179,6 +220,12 @@ void USER_UI_ShowRouteStatic(void)
     USER_OLED_putString(6u, UI_ROUTE_INFO_COL, "TMO ----", 8u);
 }
 
+/**
+ * @brief 路线页面动态刷新 — 充电进度条、当前步骤文本、超时倒计时。
+ *
+ * @note ENTER 按下时启动充电流程，后续由 USER_UI_Route_Service5ms() 驱动。
+ *       倒计时阶段触发蜂鸣器提示音。
+ */
 void USER_UI_ShowRouteDynamic(void)
 {
     static bool buzzer_triggered = false;
@@ -283,6 +330,9 @@ void USER_UI_ShowRouteDynamic(void)
     }
 }
 
+/**
+ * @brief 路线页面按键处理 — ESC 短按取消充电/倒计时。
+ */
 void USER_UI_RouteOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
     if ((key == ESC) && (event == USER_UI_KEY_EVENT_SHORT))

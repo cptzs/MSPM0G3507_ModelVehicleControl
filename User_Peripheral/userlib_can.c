@@ -1,3 +1,11 @@
+/**
+ * @file userlib_can.c
+ * @brief MSPM0 MCAN CAN 总线通信驱动。
+ *
+ * 提供 CAN 消息收发、FIFO 状态查询、中断回调注册。
+ * LiDAR 通过本驱动的 CAN 接口进行轮询通信。
+ */
+
 #include "userlib_can.h"
 
 // // RxFIFO状态结构体定义，此定义在底层库中已存在，复制在此仅供参考
@@ -74,9 +82,10 @@ DL_MCAN_RxBufElement rxMsg;
 /// @details 存储用户注册的各种中断回调函数，数组索引对应CAN_IntSource枚举值
 void (*can_int_handler[CAN_INTR_MAX])(void) = {0};
 
-/// @brief 获取当前CAN接收队列中的消息数量
-/// @param None
-/// @return 返回当前队列中的消息数量
+/**
+ * @brief 获取 CAN 接收 FIFO 中的消息数量。
+ * @return 接收队列当前填充级别。
+ */
 uint16_t USER_CAN_GetRxFIFOAmount(void)
 {
   // 初始化填充级别为0
@@ -87,9 +96,10 @@ uint16_t USER_CAN_GetRxFIFOAmount(void)
   return rxFIFOStatus.fillLvl;
 }
 
-/// @brief 获取当前CAN发送队列中的消息数量
-/// @param None
-/// @return 返回当前队列中的消息数量
+/**
+ * @brief 获取 CAN 发送 FIFO 的空闲级别。
+ * @return 发送队列当前空闲槽位数量。
+ */
 uint16_t USER_CAN_GetTxFIFOAmount(void)
 {
   // 初始化填充级别为0

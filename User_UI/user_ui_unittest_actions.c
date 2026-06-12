@@ -10,13 +10,16 @@
  */
 
 /* ---- 测试项定义 ---- */
+
+/** @brief 单个 UnitTest 测试项描述 */
 typedef struct
 {
-    const char *name;
-    const char *status;
-    bool executed;
+    const char *name;   /**< 测试项名称（OLED 列表显示） */
+    const char *status; /**< 状态文本（"pending" / "OK" / "N/A" / "ERR"） */
+    bool executed;      /**< 是否已执行过 */
 } UT_ActionItem_t;
 
+/** @brief UnitTest 测试项注册表（12 项，编译期常量） */
 static UT_ActionItem_t ut_items[] = {
     {"MTR FWD", "pending", false},
     {"MTR REV", "pending", false},
@@ -36,6 +39,11 @@ static UT_ActionItem_t ut_items[] = {
 
 /* ---- 公开接口 ---- */
 
+/**
+ * @brief 初始化 UnitTest 动作层，重置所有测试项状态。
+ *
+ * @note CAM HELLO 等不可用项初始化为 "N/A"，其余为 "pending"。
+ */
 void USER_UI_UT_Actions_Init(void)
 {
     uint8_t i;
@@ -47,6 +55,14 @@ void USER_UI_UT_Actions_Init(void)
     }
 }
 
+/**
+ * @brief 根据测试项索引执行对应的硬件动作（电机/IMU/蜂鸣器/LED 等）。
+ *
+ * @param item_index 测试项索引（0 ~ UT_ITEM_COUNT-1）。
+ * @return 执行结果（OK / SKIP / ERROR）。
+ *
+ * @note 本函数为非阻塞，执行后立即返回。耗时动作预留状态机扩展点。
+ */
 USER_UI_UT_ActionResult_t USER_UI_UT_Action_Execute(uint8_t item_index)
 {
     if (item_index >= (uint8_t)UT_ITEM_COUNT)
@@ -58,32 +74,28 @@ USER_UI_UT_ActionResult_t USER_UI_UT_Action_Execute(uint8_t item_index)
     switch (item_index)
     {
     case 0u: /* MTR FWD  — 电机前进 */
-        USER_Motor_SetMode(MOTOR_0_LEFT, MOTOR_MODE_SPEED);
-        USER_Motor_SetMode(MOTOR_1_RIGHT, MOTOR_MODE_SPEED);
-        USER_Motor_SetSpeed(MOTOR_0_LEFT, 100);
-        USER_Motor_SetSpeed(MOTOR_1_RIGHT, 100);
+        USER_Motor_SetMode(MOTOR_0_LEFT, MOTOR_MODE_NORMAL_RUN, 100);
+        USER_Motor_SetMode(MOTOR_1_RIGHT, MOTOR_MODE_NORMAL_RUN, 100);
         break;
     case 1u: /* MTR REV  — 电机后退 */
-        USER_Motor_SetMode(MOTOR_0_LEFT, MOTOR_MODE_SPEED);
-        USER_Motor_SetMode(MOTOR_1_RIGHT, MOTOR_MODE_SPEED);
-        USER_Motor_SetSpeed(MOTOR_0_LEFT, -100);
-        USER_Motor_SetSpeed(MOTOR_1_RIGHT, -100);
+        USER_Motor_SetMode(MOTOR_0_LEFT, MOTOR_MODE_NORMAL_RUN, -100);
+        USER_Motor_SetMode(MOTOR_1_RIGHT, MOTOR_MODE_NORMAL_RUN, -100);
         break;
     case 2u: /* MTR SPD0 — 电机停转 */
-        USER_Motor_SetSpeed(MOTOR_0_LEFT, 0);
-        USER_Motor_SetSpeed(MOTOR_1_RIGHT, 0);
+        USER_Motor_Stop(MOTOR_0_LEFT);
+        USER_Motor_Stop(MOTOR_1_RIGHT);
         break;
     case 3u: /* MTR STOP — 电机制动 */
-        USER_Motor_SetMode(MOTOR_0_LEFT, MOTOR_MODE_BRAKE);
-        USER_Motor_SetMode(MOTOR_1_RIGHT, MOTOR_MODE_BRAKE);
+        USER_Motor_SetMode(MOTOR_0_LEFT, MOTOR_MODE_REGEN_BRAKE, 0);
+        USER_Motor_SetMode(MOTOR_1_RIGHT, MOTOR_MODE_REGEN_BRAKE, 0);
         break;
     case 4u: /* MTR COAST — 电机滑行 */
-        USER_Motor_SetMode(MOTOR_0_LEFT, MOTOR_MODE_COAST);
-        USER_Motor_SetMode(MOTOR_1_RIGHT, MOTOR_MODE_COAST);
+        USER_Motor_SetMode(MOTOR_0_LEFT, MOTOR_MODE_COAST, 0);
+        USER_Motor_SetMode(MOTOR_1_RIGHT, MOTOR_MODE_COAST, 0);
         break;
     case 5u: /* MTR BRAKE — 电机刹车 */
-        USER_Motor_SetMode(MOTOR_0_LEFT, MOTOR_MODE_BRAKE);
-        USER_Motor_SetMode(MOTOR_1_RIGHT, MOTOR_MODE_BRAKE);
+        USER_Motor_SetMode(MOTOR_0_LEFT, MOTOR_MODE_REGEN_BRAKE, 0);
+        USER_Motor_SetMode(MOTOR_1_RIGHT, MOTOR_MODE_REGEN_BRAKE, 0);
         break;
     case 6u: /* IMU HELLO */
         USER_IMU_SetOrder(IMU_ODR_SETANGREF);
@@ -113,6 +125,12 @@ USER_UI_UT_ActionResult_t USER_UI_UT_Action_Execute(uint8_t item_index)
     return USER_UI_UT_ACTION_OK;
 }
 
+/**
+ * @brief 获取指定测试项的当前状态文本。
+ *
+ * @param item_index 测试项索引。
+ * @return 状态字符串，越界返回 "ERR"。
+ */
 const char *USER_UI_UT_Action_GetStatus(uint8_t item_index)
 {
     if (item_index >= (uint8_t)UT_ITEM_COUNT)
@@ -123,11 +141,22 @@ const char *USER_UI_UT_Action_GetStatus(uint8_t item_index)
     return ut_items[item_index].status;
 }
 
+/**
+ * @brief 获取测试项总数。
+ *
+ * @return 编译期确定的测试项数量。
+ */
 uint8_t USER_UI_UT_Action_GetItemCount(void)
 {
     return (uint8_t)UT_ITEM_COUNT;
 }
 
+/**
+ * @brief 获取测试项名称。
+ *
+ * @param item_index 测试项索引。
+ * @return 名称字符串，越界返回 "?"。
+ */
 const char *USER_UI_UT_Action_GetItemName(uint8_t item_index)
 {
     if (item_index >= (uint8_t)UT_ITEM_COUNT)

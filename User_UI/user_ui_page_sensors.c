@@ -2,11 +2,10 @@
 
 /**
  * @file user_ui_page_sensors.c
- * @brief Sensor-related OLED pages migrated from legacy user_ui.c.
+ * @brief 传感器数据页面集合：Encoder / Photoelectric / ADC / LiDAR / Gyroscope(IMU)。
  *
- * The pages in this file keep the legacy OLED layouts and staggered dynamic
- * refresh strategy, but move interactive state changes to on_key() handlers so
- * the registry-driven UI core is the only layer that consumes button events.
+ * 各页面采用逐行轮询刷新策略，按键交互通过注册表 on_key() 回调处理，
+ * 动态刷新函数不再直接读取底层按键。
  */
 
 /* ---- Encoder page state ---- */
@@ -31,6 +30,9 @@ static const char *USER_UI_EncoderStatusText(uint8_t status)
     return s_encoder_status_str[status];
 }
 
+/**
+ * @brief 绘制 Encoder 页面静态布局（3 路编码器速度/里程标签）。
+ */
 void USER_UI_ShowEncoderPageStatic(void)
 {
     USER_OLED_putString(1u, 0u, "MO: 000000  UNINIT   ", 21u);
@@ -41,6 +43,9 @@ void USER_UI_ShowEncoderPageStatic(void)
     USER_OLED_putString(6u, 0u, "  SUMR:     000000   ", 21u);
 }
 
+/**
+ * @brief Encoder 页面动态刷新 — 逐行轮询更新 3 路编码器速度和累计里程。
+ */
 void USER_UI_ShowEncoderPageDynamic(void)
 {
     s_encoder_update_line++;
@@ -77,6 +82,9 @@ void USER_UI_ShowEncoderPageDynamic(void)
     }
 }
 
+/**
+ * @brief Encoder 页面按键处理 — UP/DOWN 选择编码器，ENTER 清零累计里程。
+ */
 void USER_UI_EncoderOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
     if ((event != USER_UI_KEY_EVENT_SHORT) && (event != USER_UI_KEY_EVENT_LONG_REPEAT))
@@ -126,6 +134,9 @@ static uint8_t s_photo_update_line = 1u;
 static uint8_t s_photo_selected_channel = 0u;
 static uint8_t s_photo_selected_threshold = 0u;
 
+/**
+ * @brief 绘制 Photoelectric 页面静态布局（8 通道状态/原始值/阈值标签）。
+ */
 void USER_UI_ShowPhotoelectricPageStatic(void)
 {
     USER_OLED_putString(1u, 0u, "A:  0 0 0 0 0 0 0 0  ", 21u);
@@ -137,6 +148,9 @@ void USER_UI_ShowPhotoelectricPageStatic(void)
     USER_OLED_putString(7u, 0u, " LOW          0000   ", 21u);
 }
 
+/**
+ * @brief Photoelectric 页面动态刷新 — 逐行更新通道状态、原始 ADC 值、扫描率和阈值。
+ */
 void USER_UI_ShowPhotoelectricPageDynamic(void)
 {
     s_photo_update_line++;
@@ -186,6 +200,9 @@ void USER_UI_ShowPhotoelectricPageDynamic(void)
     }
 }
 
+/**
+ * @brief Photoelectric 页面按键处理 — LEFT/RIGHT 选通道，UP/DOWN 选阈值类型，ENTER/ESC 调整阈值。
+ */
 void USER_UI_PhotoelectricOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
     uint16_t threshold;
@@ -195,17 +212,13 @@ void USER_UI_PhotoelectricOnKey(Button_t key, USER_UI_KeyEvent_t event)
     case LEFT:
         if ((event == USER_UI_KEY_EVENT_SHORT) || (event == USER_UI_KEY_EVENT_LONG_REPEAT))
         {
-            s_photo_selected_channel = (s_photo_selected_channel == 0u) ?
-                                           (uint8_t)(OEMT_AN_COUNT - 1u) :
-                                           (uint8_t)(s_photo_selected_channel - 1u);
+            s_photo_selected_channel = (s_photo_selected_channel == 0u) ? (uint8_t)(OEMT_AN_COUNT - 1u) : (uint8_t)(s_photo_selected_channel - 1u);
         }
         break;
     case RIGHT:
         if ((event == USER_UI_KEY_EVENT_SHORT) || (event == USER_UI_KEY_EVENT_LONG_REPEAT))
         {
-            s_photo_selected_channel = (s_photo_selected_channel == (OEMT_AN_COUNT - 1u)) ?
-                                           0u :
-                                           (uint8_t)(s_photo_selected_channel + 1u);
+            s_photo_selected_channel = (s_photo_selected_channel == (OEMT_AN_COUNT - 1u)) ? 0u : (uint8_t)(s_photo_selected_channel + 1u);
         }
         break;
     case UP:
@@ -223,12 +236,12 @@ void USER_UI_PhotoelectricOnKey(Button_t key, USER_UI_KeyEvent_t event)
             if (s_photo_selected_threshold == 1u)
             {
                 USER_OEMT_AN_SetHysteresisLow(s_photo_selected_channel,
-                                               (uint16_t)(USER_OEMT_AN_GetHysteresisLow(s_photo_selected_channel) + 50u));
+                                              (uint16_t)(USER_OEMT_AN_GetHysteresisLow(s_photo_selected_channel) + 50u));
             }
             else
             {
                 USER_OEMT_AN_SetHysteresisHigh(s_photo_selected_channel,
-                                                (uint16_t)(USER_OEMT_AN_GetHysteresisHigh(s_photo_selected_channel) + 50u));
+                                               (uint16_t)(USER_OEMT_AN_GetHysteresisHigh(s_photo_selected_channel) + 50u));
             }
         }
         else if (event == USER_UI_KEY_EVENT_LONG)
@@ -263,6 +276,9 @@ void USER_UI_PhotoelectricOnKey(Button_t key, USER_UI_KeyEvent_t event)
 /* ---- ADC page ---- */
 static uint8_t s_adc_update_line = 1u;
 
+/**
+ * @brief 绘制 ADC 页面静态布局（7 通道原始值/电压/温度标签）。
+ */
 void USER_UI_ShowAdcPageStatic(void)
 {
     USER_OLED_putString(1u, 0u, "P27:  0000    0000 mV", 21u);
@@ -274,6 +290,9 @@ void USER_UI_ShowAdcPageStatic(void)
     USER_OLED_putString(7u, 0u, "VDD:  0000    0000 mV", 21u);
 }
 
+/**
+ * @brief ADC 页面动态刷新 — 逐行更新各通道原始值和换算电压/温度/电位器。
+ */
 void USER_UI_ShowAdcPageDynamic(void)
 {
     s_adc_update_line++;
@@ -321,6 +340,9 @@ void USER_UI_ShowAdcPageDynamic(void)
 static uint8_t s_lidar_update_line = 1u;
 static uint8_t s_selected_lidar = 1u;
 
+/**
+ * @brief 绘制 LiDAR 页面静态布局（4 路距离/状态 + 选中传感器详情标签）。
+ */
 void USER_UI_ShowLidarPageStatic(void)
 {
     USER_OLED_putString(1u, 0u, "L1: 00000  STA  000  ", 21u);
@@ -332,6 +354,9 @@ void USER_UI_ShowLidarPageStatic(void)
     USER_OLED_putString(7u, 0u, "TO:     0  RF:     0 ", 21u);
 }
 
+/**
+ * @brief LiDAR 页面动态刷新 — 逐行更新 4 路距离和选中传感器的 TX/RX/超时统计。
+ */
 void USER_UI_ShowLidarPageDynamic(void)
 {
     s_lidar_update_line++;
@@ -374,6 +399,9 @@ void USER_UI_ShowLidarPageDynamic(void)
     }
 }
 
+/**
+ * @brief LiDAR 页面按键处理 — UP/DOWN 切换选中的 LiDAR 传感器编号。
+ */
 void USER_UI_LidarOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
     if ((event != USER_UI_KEY_EVENT_SHORT) && (event != USER_UI_KEY_EVENT_LONG_REPEAT))
@@ -408,6 +436,9 @@ void USER_UI_LidarOnKey(Button_t key, USER_UI_KeyEvent_t event)
 /* ---- Gyroscope / IMU page ---- */
 static uint8_t s_gyro_update_line = 1u;
 
+/**
+ * @brief 绘制 Gyroscope/IMU 页面静态布局（加速度/角速度/姿态角/温度/状态标签）。
+ */
 void USER_UI_ShowGyroscopePageStatic(void)
 {
     USER_OLED_putString(1u, 0u, "      X      Y      Z", 21u);
@@ -419,6 +450,9 @@ void USER_UI_ShowGyroscopePageStatic(void)
     USER_OLED_putString(7u, 0u, "TX : 00000 RX : 00000", 21u);
 }
 
+/**
+ * @brief Gyroscope/IMU 页面动态刷新 — 逐行更新三轴加速度/角速度/姿态角和通信统计。
+ */
 void USER_UI_ShowGyroscopePageDynamic(void)
 {
     s_gyro_update_line++;
@@ -459,6 +493,9 @@ void USER_UI_ShowGyroscopePageDynamic(void)
     }
 }
 
+/**
+ * @brief Gyroscope 页面按键处理 — ENTER 设角度参考，ESC 设偏航参考。
+ */
 void USER_UI_GyroscopeOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
     if (event != USER_UI_KEY_EVENT_SHORT)

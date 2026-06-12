@@ -12,8 +12,8 @@
 #include <math.h>    //数学库函数
 
 // 用户外设接口头文件
-#include "userlib_sys.h" // 系统时间和SysTick相关函数
-#include "userlib_can.h" // CAN通信相关函数
+#include "userlib_systick.h" // SysTick驱动接口
+#include "userlib_can.h"     // CAN通信相关函数
 
 // 用户设备头文件
 #include "userlib_lbb.h" // LED、按钮和蜂鸣器相关函数

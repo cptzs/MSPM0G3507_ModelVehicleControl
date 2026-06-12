@@ -11,6 +11,9 @@
 
 static uint8_t s_imu_sum_update_line = 1u;
 
+/**
+ * @brief 显示 IMU 累计和页面的静态内容。
+ */
 void USER_UI_ShowIMUSumPageStatic(void)
 {
     USER_OLED_putString(1u, 0u, "      X      Y      Z", 21u);
@@ -21,6 +24,9 @@ void USER_UI_ShowIMUSumPageStatic(void)
     USER_OLED_putString(6u, 0u, "Reset: ENTER         ", 21u);
 }
 
+/**
+ * @brief 显示 IMU 累计和页面的动态内容。
+ */
 void USER_UI_ShowIMUSumPageDynamic(void)
 {
     s_imu_sum_update_line++;
@@ -46,6 +52,12 @@ void USER_UI_ShowIMUSumPageDynamic(void)
     }
 }
 
+/**
+ * @brief 处理 IMU 累计和页面的按键事件。
+ *
+ * @param key 按键类型。
+ * @param event 按键事件。
+ */
 void USER_UI_IMUSumOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
     if (event != USER_UI_KEY_EVENT_SHORT)

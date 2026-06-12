@@ -3,16 +3,13 @@
 
 /**
  * @file user_ui.h
- * @brief UI 子模块兼容入口。
+ * @brief UI 模块统一入口。
  *
- * 历史代码仍通过 #include "user_ui.h" 引入 UI 内部页面声明。新代码若只需要
- * 调用 UI 周期任务，应优先包含 "UI/user_ui_public.h"。
- *
- * 本兼容头用于渐进式拆分 user_ui.c，避免一次性修改 main.c、IAR 工程和
- * legacy 页面实现。后续页面完全迁移后，本文件可以进一步瘦身为仅包含
- * UI/user_ui_public.h。
+ * 已全面切换到注册表驱动的新 UI 架构，不再包含 legacy 页面实现。
+ * 外部模块只需包含本头文件即可获得所有 UI 内部声明。
+ * 若仅需调用周期任务，可轻量包含 "User_UI/user_ui_public.h"。
  */
 
-#include "UI/user_ui_internal.h"
+#include "../User_UI/user_ui_internal.h"
 
 #endif /* USER_UI_H */

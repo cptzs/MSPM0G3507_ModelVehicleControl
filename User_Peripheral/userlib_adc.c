@@ -1,11 +1,21 @@
+/**
+ * @file userlib_adc.c
+ * @brief MSPM0 ADC12 多通道采样驱动。
+ *
+ * 负责 ADC 初始化/反初始化、采样结果读取、温度/电压换算。
+ * 使用 ADC12 硬件扫描模式，由中断自动填充缓冲区。
+ */
+
 #include "userlib_adc.h"
 
-uint16_t *adc_data_buffer = 0; // ADC采样结果缓冲区
-uint16_t channel_count = 0;    // ADC通道数量
+uint16_t *adc_data_buffer = 0; /* ADC采样结果缓冲区 */
+uint16_t channel_count = 0;    /* ADC通道数量 */
 
-/// @brief ADC初始化函数
-/// @param data_buffer 存储ADC采样结果的缓冲区
-/// @param channel_count ADC通道数量
+/**
+ * @brief ADC 初始化函数。
+ * @param pbuffer 存储 ADC 采样结果的缓冲区指针。
+ * @param ch_count ADC 通道数量。
+ */
 void USER_ADC_Init(uint16_t *pbuffer, uint16_t ch_count)
 {
     // 设置ADC采样结果缓冲区
@@ -19,8 +29,10 @@ void USER_ADC_Init(uint16_t *pbuffer, uint16_t ch_count)
     DL_ADC12_startConversion(ADC12_0_INST);
 }
 
-/// @brief ADC反初始化函数
-/// @param None
+/**
+ * @brief ADC 反初始化函数。
+ * @details 停止 ADC 转换、禁用中断并清空缓冲区指针。
+ */
 void USER_ADC_DeInit(void)
 {
 
@@ -89,8 +101,10 @@ uint16_t USER_ADC_ValueToVoltage(uint16_t rawdata)
     return (uint16_t)((float)rawdata * (ADC_REF_VOLTAGE / 4096.0f)); // 假设ADC分辨率为12位，参考电压为3.3V
 }
 
-/// @brief ADC中断处理函数
-/// @param None
+/**
+ * @brief ADC12 硬件中断处理函数。
+ * @details 当所有配置通道的采样结果就绪后，批量读取到缓冲区。
+ */
 void ADC12_0_INST_IRQHandler(void)
 {
 

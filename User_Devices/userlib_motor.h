@@ -12,8 +12,8 @@
 #include <math.h>    //数学库函数
 
 // 用户外设接口头文件
-#include "userlib_sys.h" // 系统时间和SysTick相关函数
-#include "userlib_pwm.h" // PWM相关函数
+#include "userlib_systick.h" // SysTick驱动接口
+#include "userlib_pwm.h"     // PWM相关函数
 
 // 用户设备头文件
 // #define MOTOR_B_REVERSE // 设置左电机反转

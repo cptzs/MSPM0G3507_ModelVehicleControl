@@ -8,6 +8,9 @@
  * 后续接入相机后在此实现图像预览、目标识别状态等显示逻辑。
  */
 
+/**
+ * @brief 绘制 Camera 页面静态占位内容（相机未接入提示）。
+ */
 void USER_UI_ShowCameraPageStatic(void)
 {
     USER_OLED_putString(1u, 0u, "Camera not connected ", 21u);
@@ -15,6 +18,9 @@ void USER_UI_ShowCameraPageStatic(void)
     USER_OLED_putString(5u, 0u, "smart camera module  ", 21u);
 }
 
+/**
+ * @brief Camera 页面动态刷新（当前无数据，预留）。
+ */
 void USER_UI_ShowCameraPageDynamic(void)
 {
     /* 相机未接入，无动态数据刷新 */

@@ -2,12 +2,14 @@
 
 /**
  * @file user_ui_page_motor.c
- * @brief Motor Control 页面。
+ * @brief Motor Control 页面 — 显示左右电机 PID 状态（模式/目标/实际/误差/积分/微分/PWM）。
  *
- * 本文件从 legacy user_ui.c 中迁移电机状态显示页面，保持原 OLED 布局与
- * 分行轮询刷新策略不变，只更换为新 UI 分层命名，避免和 legacy 函数重名。
+ * 采用逐行轮询刷新策略，每 5ms 刷新一行，降低 OLED SPI 瞬时负载。
  */
 
+/**
+ * @brief 绘制 Motor Control 页面静态布局（7 行标签）。
+ */
 void USER_UI_ShowMotorPageStatic(void)
 {
     USER_OLED_putString(1u, 0u, "MODE    00000   00000", 21u); /* 左右电机模式 */
@@ -19,6 +21,11 @@ void USER_UI_ShowMotorPageStatic(void)
     USER_OLED_putString(7u, 0u, "PWM     00000   00000", 21u); /* 左右PWM占空比 */
 }
 
+/**
+ * @brief Motor Control 页面动态刷新 — 逐行轮询更新左右电机 PID 参数。
+ *
+ * @note 每 5ms 刷新 1 行（共 7 行），周期约 35ms 完成全屏刷新。
+ */
 void USER_UI_ShowMotorPageDynamic(void)
 {
     static uint8_t update_line = 1u;

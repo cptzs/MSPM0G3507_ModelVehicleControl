@@ -1,7 +1,5 @@
 #include "userapp_race.h"
 
-#include "userapp_race_table.h"
-
 /**
  * @file userapp_race.c
  * @brief 比赛路线启动与动作表调度。
@@ -52,6 +50,112 @@ static void USER_Race_EnsureExecutorInit(void)
         USER_Race_TableExecutor_Init(&race_executor, USER_Race_TASK_PERIOD_MS);
         race_executor_initialized = true;
     }
+}
+
+/**
+ * @brief 获取路线显示名称。
+ *
+ * @param race_route `RaceRoute_t` 路线编号。
+ *
+ * @return 路线名称字符串；未知路线返回 `Unknown`。
+ */
+const char *USER_Race_GetRouteName(uint8_t race_route)
+{
+    switch (race_route)
+    {
+    case RACE_ROUTE_TEMPLATE:
+        return "Template";
+
+    default:
+        return "Unknown";
+    }
+}
+
+/**
+ * @brief 获取当前正在执行的路线动作信息。
+ *
+ * @param action_ptr 输出当前动作内容；允许传入 NULL。
+ * @param step_index_ptr 输出当前步骤索引，从 0 开始；允许传入 NULL。
+ * @param remain_timeout_ms_ptr 输出当前动作表层超时剩余时间，单位 ms；允许传入 NULL。
+ *
+ * @return true 表示当前存在有效动作；false 表示路线未运行、已结束或当前索引无效。
+ */
+bool USER_Race_GetCurrentAction(USER_Race_Action_t *action_ptr,
+                                int16_t *step_index_ptr,
+                                uint32_t *remain_timeout_ms_ptr)
+{
+    int16_t current_index;
+    const USER_Race_Action_t *current_action;
+
+    /* 步骤1：确保执行器初始化，避免 UI 在 Race_Task() 前读取未初始化上下文。 */
+    USER_Race_EnsureExecutorInit();
+
+    /* 步骤2：路线没有处于运行或等待动作完成状态时，不返回当前动作。 */
+    if ((race_executor.state != USER_Race_TABLE_STATE_RUNNING) &&
+        (race_executor.state != USER_Race_TABLE_STATE_WAIT_ACTION_DONE))
+    {
+        return false;
+    }
+
+    /* 步骤3：检查当前动作索引是否在表范围内。 */
+    current_index = race_executor.current_index;
+    if ((current_index < 0) || ((uint16_t)current_index >= race_executor.table_size) ||
+        (race_executor.table == NULL))
+    {
+        return false;
+    }
+
+    current_action = &race_executor.table[current_index];
+
+    /* 步骤4：根据调用者需要拷贝动作、步骤号和剩余超时时间。 */
+    if (action_ptr != NULL)
+    {
+        *action_ptr = *current_action;
+    }
+
+    if (step_index_ptr != NULL)
+    {
+        *step_index_ptr = current_index;
+    }
+
+    if (remain_timeout_ms_ptr != NULL)
+    {
+        if ((current_action->timeout_ms == 0u) ||
+            (race_executor.action_elapsed_ms >= current_action->timeout_ms))
+        {
+            *remain_timeout_ms_ptr = 0u;
+        }
+        else
+        {
+            *remain_timeout_ms_ptr = current_action->timeout_ms - race_executor.action_elapsed_ms;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * @brief 获取模板路线第一步动作，供路线页面在未启动时显示预览。
+ *
+ * @param action_ptr 输出第一步动作内容；允许传入 NULL。
+ * @param remain_timeout_ms_ptr 输出第一步超时时间，单位 ms；允许传入 NULL。
+ *
+ * @return true 表示预览动作有效。
+ */
+bool USER_Race_GetTemplatePreviewAction(USER_Race_Action_t *action_ptr,
+                                        uint32_t *remain_timeout_ms_ptr)
+{
+    if (action_ptr != NULL)
+    {
+        *action_ptr = race_template_actions[0];
+    }
+
+    if (remain_timeout_ms_ptr != NULL)
+    {
+        *remain_timeout_ms_ptr = race_template_actions[0].timeout_ms;
+    }
+
+    return true;
 }
 
 /**

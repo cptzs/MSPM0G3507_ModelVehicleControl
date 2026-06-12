@@ -14,14 +14,15 @@
 不得仅因代码可编译或由 AI 生成说明看似合理，就直接合并到主分支或用于实车测试。
 
 构建/调试提示：
-- 使用 IAR Embedded Workbench（项目文件在仓库根目录）。
-- 可使用 `make`/`makefile` 在支持的环境下构建。
+- 固定使用 IAR Embedded Workbench IDE 构建与调试，项目文件在仓库根目录。
+- 命令行 make 构建入口已移除，后续工程文件维护以 IAR `.ewp` 为准。
 
 仓库结构（部分）：
 - `User_Application/` 应用层
 - `User_Algorithm/` 算法库（PID 等）
 - `User_Devices/` 设备驱动
 - `User_Peripheral/` 外设封装
+- `User_OS/` 1ms 协作式任务调度内核
 
 许可：MIT。作者：cptzs
 
@@ -33,6 +34,7 @@
 - **设备驱动 (`User_Devices/`)**：传感器与设备驱动（编码器、IMU、LiDAR、OLED、马达、舵机、Modbus 等），负责数据采集、预处理与设备控制。
 - **算法库 (`User_Algorithm/`)**：可复用的控制算法（例如 PID）、滤波器等。
 - **应用层 (`User_Application/`)**：系统状态机、比赛策略、运动控制协调与任务调度。
+- **伪 RTOS 层 (`User_OS/`)**：基于 1ms tick 的协作式周期任务调度。
 - **入口与集成 (`main.c`)**：系统初始化、模块注册与主循环。
 
 主要文件/模块说明（按目录）：
@@ -51,6 +53,7 @@
 
 ### User_Devices/
 - **userlib_encoder.c / userlib_encoder.h**：编码器接口与计数处理，用于里程与速度计算。
+- **userlib_fonts.c / userlib_fonts.h**：OLED 字库数据，独立于 OLED 主驱动维护。
 - **userlib_imu.c / userlib_imu.h**：IMU 读取、滤波与基础姿态推算接口。
 - **userlib_lbb.c / userlib_lbb.h**：项目特定的 LBB 外设驱动（见源文件注释以了解具体用途和接口）。
 - **userlib_lidar.c / userlib_lidar.h**：LiDAR 数据接收与距离/点信息解析封装。
@@ -67,6 +70,9 @@
 - **userlib_pwm.c / userlib_pwm.h**：通用 PWM 生成接口，用于电机/舵机等设备的占空比控制。
 - **userlib_sys.c / userlib_sys.h**：系统级初始化、延时、时钟与错误处理等平台服务。
 - **userlib_uart.c / userlib_uart.h**：UART 串口的收发封装与缓冲处理。
+
+### User_OS/
+- **user_os.c / user_os.h**：1ms 协作式伪 RTOS 调度器，负责周期任务注册、错峰调度和运行统计。
 
 快速定位与阅读建议：
 - 从 `main.c` 查看系统初始化、模块绑定与主循环逻辑。

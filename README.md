@@ -1,83 +1,82 @@
-# MSPM0G3507 Model Vehicle Control (Basic)
+# MSPM0G3507 Model Vehicle Control
 
-简要说明：这是基于 MSPM0G3507 的模型小车控制基础工程，包含驱动、设备抽象、应用层状态机与算法实现。
+基于 TI MSPM0G3507 的两轮模型车控制工程，面向大学生电赛类智能小车开发。当前 `ai_assist` 分支采用分层架构：外设封装、设备驱动、全局数据、统一车辆状态估测、非阻塞运动控制、表格化路线调度、本地 UI，以及 1ms tick 驱动的协作式调度器。
 
-## AI 协助更新说明
+## 构建与入口
 
-本分支由 GPT 协助更新，用于进行 AI 辅助开发、代码整理与审查测试。涉及 AI 生成或 AI 修改的代码、配置、文档内容，合并前必须经过人工严格审查，重点关注以下风险：
+- 使用 **IAR Embedded Workbench** 构建和调试：`basic.eww`、`basic.ewp`。
+- MSPM0 外设配置由 SysConfig 维护：`main.syscfg`、`ti_msp_dl_config.c/h`。
+- 命令行 `makefile` 构建入口已移除，后续以 IAR 工程文件为准。
+- 程序入口为 `main.c`。
 
-- 代码逻辑是否符合真实硬件行为与控制需求。
-- 外设初始化、时序、寄存器配置和中断处理是否安全可靠。
-- 控制算法参数、状态机跳转、保护逻辑是否可能导致车辆失控或硬件损坏。
-- AI 生成内容是否引入未验证依赖、错误注释、隐含假设或不可复现行为。
+## 运行流程
 
-不得仅因代码可编译或由 AI 生成说明看似合理，就直接合并到主分支或用于实车测试。
+`main.c` 启动后依次执行：`SYSCFG_DL_init()`、`USER_SYSTEM_Init()`、`USER_OS_Init()`、`USER_GlobalData_Init()`、`USER_Device_Init()`、`USER_STATE_Init()`、`USER_RegisterSchedulerTasks()`，随后在主循环中持续调用 `USER_OS_Run()`。
 
-构建/调试提示：
-- 固定使用 IAR Embedded Workbench IDE 构建与调试，项目文件在仓库根目录。
-- 命令行 make 构建入口已移除，后续工程文件维护以 IAR `.ewp` 为准。
+`User_OS` 不是抢占式 RTOS，不做上下文切换，也不分配独立任务栈。所有任务仍运行在 `main` 前台上下文中，任务函数必须短小、非阻塞。
 
-仓库结构（部分）：
-- `User_Application/` 应用层
-- `User_Algorithm/` 算法库（PID 等）
-- `User_Devices/` 设备驱动
-- `User_Peripheral/` 外设封装
-- `User_OS/` 1ms 协作式任务调度内核
+## 当前调度任务
 
-许可：MIT。作者：cptzs
+- `global`：1ms，刷新 ADC、电位器、温度、电源电压等全局数据。
+- `lidar`：5ms，维护 LiDAR 通信和数据。
+- `ui`：5ms，处理 OLED、按键和路线启动交互。
+- `state`：10ms，刷新统一车辆状态估计。
+- `mcm`：10ms，执行非阻塞运动控制状态机。
+- `race`：10ms，处理路线请求和动作表调度。
+- `heartbeat`：500ms，LED0 心跳。
 
-## 用户模块详解与架构
+任务注册支持周期、offset 错峰和 priority 优先级；priority 数值越小优先级越高。
 
-项目分层（自底向上）：
-- **硬件层**：MCU、传感器与外设硬件。
-- **外设封装 (`User_Peripheral/`)**：对 MCU 外设（ADC、PWM、UART、CAN 等）的统一封装，提供一致的低级接口。
-- **设备驱动 (`User_Devices/`)**：传感器与设备驱动（编码器、IMU、LiDAR、OLED、马达、舵机、Modbus 等），负责数据采集、预处理与设备控制。
-- **算法库 (`User_Algorithm/`)**：可复用的控制算法（例如 PID）、滤波器等。
-- **应用层 (`User_Application/`)**：系统状态机、比赛策略、运动控制协调与任务调度。
-- **伪 RTOS 层 (`User_OS/`)**：基于 1ms tick 的协作式周期任务调度。
-- **入口与集成 (`main.c`)**：系统初始化、模块注册与主循环。
+## 核心模块
 
-主要文件/模块说明（按目录）：
+- `User_Peripheral/`：ADC、CAN、PWM、UART、系统服务等 MCU 外设封装。
+- `User_Devices/`：LBB、OLED/字库、编码器、IMU、LiDAR、电机、舵机、Modbus、OEMT 光电等设备驱动。
+- `globals.c/h`：集中保存传感器数据、PID 实例、ADC 数据和 Modbus 数据区。
+- `User_OS/user_os.c/h`：1ms 协作式任务调度器。
+- `userapp_state_estimator.c/h`：统一状态估测层，是应用层中唯一直接读取编码器和 IMU 原始数据的模块。
+- `userapp_vehicle_model.h`：车辆几何、编码器和路程计标定参数。
+- `userapp_mcm.c/h`：非阻塞运动控制管理器，当前支持直行/后退和原地旋转。
+- `userapp_race_table.c/h`：表格化路线调度器，只解释动作表并调用 MCM，不直接写电机或传感器。
+- `userapp_race.c/h`：路线启动请求和动作表推进；当前包含模板路线。
+- `user_ui.c/h`：唯一直接操作 OLED、按键、LED、蜂鸣器的应用层模块。
+- `User_Algorithm/`：当前主要提供 PID 控制器。
 
-### User_Algorithm/
-- **userlib_pid.c / userlib_pid.h**：PID 控制器实现与封装，供速度、角度或位置回路使用。
+## 当前控制链路
 
-### User_Application/
-- **user_ui.c / user_ui.h**：人机交互层，包含按键扫描、菜单、OLED 显示与操作提示。
-- **userapp_mcm.c / userapp_mcm.h**：运动控制管理（Motion Control Manager），负责接收高层命令并协调下层控制器与执行器。
-- **userapp_race.c / userapp_race.h**：比赛逻辑与策略（起跑、巡线/避障、弯道处理等行为决策）。
-- **userapp_race_table.c / userapp_race_table.h**：赛道/动作表格数据管理（预设路径点、动作序列、赛段参数等）。
-- **userapp_state.c / userapp_state.h**：系统运行状态机与状态转换（运行、暂停、错误处理与恢复）。
-- **userapp_state_estimator.c / userapp_state_estimator.h**：传感器融合与状态估计（里程、速度、姿态的滤波与估计）。
-- **userapp_vehicle_model.h**：车辆运动学/动力学参数与模型接口（供控制与轨迹计算使用）。
+```text
+编码器 / IMU / ADC / LiDAR 等设备数据
+        ↓
+globals + User_GlobalData_Task
+        ↓
+USER_State_Task 统一状态估测
+        ↓
+USER_MCM_Task 非阻塞运动控制
+        ↓
+速度 PID + userlib_motor 电机输出
+```
 
-### User_Devices/
-- **userlib_encoder.c / userlib_encoder.h**：编码器接口与计数处理，用于里程与速度计算。
-- **userlib_fonts.c / userlib_fonts.h**：OLED 字库数据，独立于 OLED 主驱动维护。
-- **userlib_imu.c / userlib_imu.h**：IMU 读取、滤波与基础姿态推算接口。
-- **userlib_lbb.c / userlib_lbb.h**：项目特定的 LBB 外设驱动（见源文件注释以了解具体用途和接口）。
-- **userlib_lidar.c / userlib_lidar.h**：LiDAR 数据接收与距离/点信息解析封装。
-- **userlib_modbus.c / userlib_modbus.h**：Modbus 协议封装（寄存器读写、协议帧收发）。
-- **userlib_motor.c / userlib_motor.h**：电机控制抽象（PWM、方向，和必要的保护/限幅逻辑）。
-- **userlib_oemt_an.c / userlib_oemt_an.h**：OEM 模块模拟量接口（AN），用于采集/输出模拟信号。
-- **userlib_oemt_dg.c / userlib_oemt_dg.h**：OEM 模块数字量接口（DG），用于数字 IO 控制。
-- **userlib_oled.c / userlib_oled.h**：OLED 显示驱动与便捷显示函数。
-- **userlib_servo.c / userlib_servo.h**：舵机控制（占空比到角度映射与控制封装）。
+路线启动链路：
 
-### User_Peripheral/
-- **userlib_adc.c / userlib_adc.h**：ADC 初始化与通道采样封装。
-- **userlib_can.c / userlib_can.h**：CAN 总线消息的发送/接收封装与处理。
-- **userlib_pwm.c / userlib_pwm.h**：通用 PWM 生成接口，用于电机/舵机等设备的占空比控制。
-- **userlib_sys.c / userlib_sys.h**：系统级初始化、延时、时钟与错误处理等平台服务。
-- **userlib_uart.c / userlib_uart.h**：UART 串口的收发封装与缓冲处理。
+```text
+user_ui 长按 ENTER 蓄力与倒计时
+        ↓
+USER_Race_RequestStart
+        ↓
+USER_Race_Task
+        ↓
+userapp_race_table 动作表
+        ↓
+USER_MCM_StartStraight / USER_MCM_StartSpin
+```
 
-### User_OS/
-- **user_os.c / user_os.h**：1ms 协作式伪 RTOS 调度器，负责周期任务注册、错峰调度和运行统计。
+## 配置项与限制
 
-快速定位与阅读建议：
-- 从 `main.c` 查看系统初始化、模块绑定与主循环逻辑。
-- 阅读 `userapp_state.c` 了解系统状态机与主要运行流程。
-- 阅读 `userapp_mcm.c` 与 `userlib_pid.c` 理解控制信号的生成与闭环调节链路。
-- 新设备接入流程：先在 `User_Peripheral` 实现外设封装，再在 `User_Devices` 实现设备驱动，最后在 `User_Application` 中集成并测试。
+- `OEMT_SENSOR_MODE`：选择 OEMT 模拟光电或数字光电。两者共享物理接口，不能同时启用。
+- `USER_STATE_DEFAULT_ESTIMATOR`：选择状态估测方法。当前只有 RAW 实际可用，其它方法为预留入口并回落到 RAW。
+- 当前默认初始化全部外部设备，不再通过宏裁剪设备启动逻辑。
+- `USER_MCM_StartArc()` 只是预留接口，当前未实现。
+- 当前模板路线为：直行 500mm、旋转 180°、返回 500mm、再旋转 180°。
 
-备注：每个源文件顶部通常包含实现说明、依赖与使用示例，阅读文件头部注释可快速理解具体实现细节。
+## 许可
+
+MIT License。

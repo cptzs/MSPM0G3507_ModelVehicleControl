@@ -88,6 +88,32 @@ bool USER_UI_DrawPageDynamicFromRegistry(DisplayPage_t page);
 bool USER_UI_DispatchPageKeyFromRegistry(DisplayPage_t page, Button_t key, USER_UI_KeyEvent_t event);
 DisplayPage_t USER_UI_GetAdjacentPageFromRegistry(DisplayPage_t current_page, bool forward);
 
+/* ---- UI input/event adapters ---- */
+USER_UI_KeyEvent_t USER_UI_ConvertButtonEvent(USER_LBB_ButtonEvent_t event);
+USER_UI_KeyEvent_t USER_UI_ConsumeButtonEvent(Button_t button);
+bool USER_UI_ConsumeAndDispatchButton(DisplayPage_t page, Button_t button);
+
+/* ---- UI core state helpers ---- */
+DisplayPage_t USER_UI_Core_GetCurrentPage(void);
+void USER_UI_Core_SetCurrentPage(DisplayPage_t page);
+void USER_UI_Core_GotoAdjacentPage(bool forward);
+bool USER_UI_Core_IsStaticDirty(void);
+void USER_UI_Core_MarkStaticDirty(void);
+void USER_UI_Core_ClearStaticDirty(void);
+void USER_UI_Core_RedrawStaticIfNeeded(void);
+void USER_UI_Core_DrawCurrentDynamic(void);
+
+/* ---- Route start interaction context ---- */
+void USER_UI_Route_Reset(void);
+void USER_UI_Route_StartCharge(uint8_t route);
+void USER_UI_Route_CancelCharge(void);
+bool USER_UI_Route_IsBusy(void);
+bool USER_UI_Route_IsCharging(void);
+bool USER_UI_Route_IsCountdown(void);
+uint8_t USER_UI_Route_GetPendingRoute(void);
+uint16_t USER_UI_Route_GetCountdownRemainMs(void);
+void USER_UI_Route_Service5ms(bool enter_is_pressed, uint16_t enter_press_time_ms);
+
 /* ---- legacy 页面分发接口 ---- */
 void USER_UI_ShowStaticContent(DisplayPage_t page);
 void USER_UI_ShowDynamicContent(DisplayPage_t page);

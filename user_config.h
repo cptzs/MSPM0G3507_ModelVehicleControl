@@ -1,0 +1,63 @@
+#ifndef USER_CONFIG_H
+#define USER_CONFIG_H
+
+/*
+ * 用户配置说明：
+ * 外部设备现在默认全部初始化和启动，不再使用宏做设备裁剪。
+ * 这里只保留 OEMT 光电传感器模式选择，因为模拟式和数字式共享同一组物理接口，不能同时启用。
+ */
+
+/*
+ * OEMT 光电传感器模式：
+ * OEMT_SENSOR_MODE_AN：模拟式光电传感器，默认模式。
+ * OEMT_SENSOR_MODE_DG：数字式光电传感器。
+ *
+ * 切换方式：
+ * 1. 使用模拟式：保持默认，或设置 #define OEMT_SENSOR_MODE OEMT_SENSOR_MODE_AN
+ * 2. 使用数字式：改为 #define OEMT_SENSOR_MODE OEMT_SENSOR_MODE_DG
+ */
+#define OEMT_SENSOR_MODE_AN 0
+#define OEMT_SENSOR_MODE_DG 1
+
+#ifndef OEMT_SENSOR_MODE
+#define OEMT_SENSOR_MODE OEMT_SENSOR_MODE_AN
+#endif
+
+#if (OEMT_SENSOR_MODE != OEMT_SENSOR_MODE_AN) && \
+    (OEMT_SENSOR_MODE != OEMT_SENSOR_MODE_DG)
+#error "OEMT_SENSOR_MODE must be OEMT_SENSOR_MODE_AN or OEMT_SENSOR_MODE_DG"
+#endif
+
+/*
+ * 车辆状态估测方法：
+ * USER_STATE_ESTIMATOR_RAW：基础直通估测，当前默认可用方法。
+ * USER_STATE_ESTIMATOR_WEIGHTED：加权融合估测，当前预留入口。
+ * USER_STATE_ESTIMATOR_COMPLEMENTARY：互补滤波估测，当前预留入口。
+ * USER_STATE_ESTIMATOR_KALMAN：Kalman 估测，当前预留入口。
+ * USER_STATE_ESTIMATOR_EKF：扩展 Kalman 估测，当前预留入口。
+ *
+ * 切换方式：
+ * 1. 默认使用基础直通估测：保持默认配置。
+ * 2. 需要测试预留入口时：改为对应的 USER_STATE_ESTIMATOR_xxx。
+ *
+ * 注意：预留入口在算法库接入前会自动回落到基础直通估测，不改变发布接口。
+ */
+#define USER_STATE_ESTIMATOR_RAW 0
+#define USER_STATE_ESTIMATOR_WEIGHTED 1
+#define USER_STATE_ESTIMATOR_COMPLEMENTARY 2
+#define USER_STATE_ESTIMATOR_KALMAN 3
+#define USER_STATE_ESTIMATOR_EKF 4
+
+#ifndef USER_STATE_DEFAULT_ESTIMATOR
+#define USER_STATE_DEFAULT_ESTIMATOR USER_STATE_ESTIMATOR_RAW
+#endif
+
+#if (USER_STATE_DEFAULT_ESTIMATOR != USER_STATE_ESTIMATOR_RAW) && \
+    (USER_STATE_DEFAULT_ESTIMATOR != USER_STATE_ESTIMATOR_WEIGHTED) && \
+    (USER_STATE_DEFAULT_ESTIMATOR != USER_STATE_ESTIMATOR_COMPLEMENTARY) && \
+    (USER_STATE_DEFAULT_ESTIMATOR != USER_STATE_ESTIMATOR_KALMAN) && \
+    (USER_STATE_DEFAULT_ESTIMATOR != USER_STATE_ESTIMATOR_EKF)
+#error "USER_STATE_DEFAULT_ESTIMATOR must be a supported estimator method"
+#endif
+
+#endif /* USER_CONFIG_H */

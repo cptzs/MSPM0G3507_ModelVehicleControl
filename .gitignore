@@ -1,0 +1,52 @@
+# IAR build output
+Debug/
+Release/
+settings/
+*.dep
+*.ewt
+*.ewd
+*.wsdt
+*.browse
+*.pbi
+*.pbd
+*.xcl
+*.map
+*.lst
+*.out
+*.bin
+*.hex
+*.elf
+*.d51
+*.sim
+
+# IAR user/workspace local files
+*.eww.user
+*.ewp.user
+*.ewd.user
+*.custom_argvars
+
+# TI / SysConfig generated cache
+.syscfg/
+.metadata/
+.projectspec
+*.log
+
+# Object and dependency files
+*.o
+*.obj
+*.d
+*.su
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+Thumbs.db
+.DS_Store
+
+# VS Code local settings
+.vscode/
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json

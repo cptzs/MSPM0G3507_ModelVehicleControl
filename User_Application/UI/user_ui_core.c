@@ -5,9 +5,10 @@
  * @brief Registry-driven UI task implementation.
  *
  * This file is the target replacement for the legacy USER_UI_Task() still kept in
- * User_Application/user_ui.c. Do not add this file to the IAR project until the
- * legacy task entry has been removed or renamed, otherwise USER_UI_Task will be
- * defined twice.
+ * User_Application/user_ui.c.  When switching the IAR project, compile this file
+ * together with user_ui_legacy_pages.c instead of compiling ../user_ui.c directly.
+ * The helper script tools/migrate_iar_ui_core.py performs that deterministic
+ * project-file switch for basic.ewp.
  */
 
 static bool USER_UI_Core_PageHasKeyHandler(DisplayPage_t page)

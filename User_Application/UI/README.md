@@ -11,16 +11,17 @@
 - `user_ui_internal.h`
   - UI 内部接口。
   - 暂时保存页面枚举、legacy 页面函数声明和旧页面实现依赖。
-  - 已新增页面描述符 `USER_UI_PageDef_t`、页面表访问接口、注册表分发 helper、输入事件适配、页面状态 helper、路线启动 context 接口和新 Motor/Actuator/Debug/Route/UnitTest 页面接口。
+  - 已新增页面描述符 `USER_UI_PageDef_t`、页面表访问接口、注册表分发 helper、输入事件适配、页面状态 helper、路线启动 context 接口和新 Motor/Sensors/Actuator/Debug/Route/UnitTest 页面接口。
   - 后续每迁移一个页面，就应把对应依赖下沉到该页面自己的 `.c` 文件中。
 
 - `user_ui_pages.c`
   - 新 UI 页面注册表。
-  - 当前注册了 legacy 页面、新 Motor 页面、新 Actuator 页面、新 Debug 页面、新 Route 页面和 `PAGE_UNITTEST`。
+  - 当前注册了新 Motor 页面、新 Sensors 页面、新 Actuator 页面、新 Debug 页面、新 Route 页面、`PAGE_UNITTEST`，以及少量 legacy 页面。
   - `PAGE_MOTOR` 已切到 `user_ui_page_motor.c` 的新实现。
+  - `PAGE_ENCODER`、`PAGE_PHOTOELECTRIC`、`PAGE_ADC`、`PAGE_LIDAR`、`PAGE_GYROSCOPE` 已切到 `user_ui_page_sensors.c` 的新实现。
   - `PAGE_SERVO` 已切到 `user_ui_page_actuator.c` 的新实现。
   - `PAGE_DEBUG` 已切到 `user_ui_page_debug.c` 的新实现。
-  - `PAGE_TEMPLATE` 已切到 `user_ui_page_route.c` 的新实现；其他 legacy 页面仍临时调用 legacy 页面绘制函数。
+  - `PAGE_TEMPLATE` 已切到 `user_ui_page_route.c` 的新实现；`PAGE_CAMERA` 和 `PAGE_IMU_SUM` 仍临时调用 legacy 页面绘制函数。
 
 - `user_ui_dispatch.c`
   - 页面注册表通用分发层。
@@ -46,7 +47,7 @@
   - 过渡期 legacy 页面包装文件。
   - 通过包含 `../user_ui.c` 复用旧页面绘制函数，同时把旧 `USER_UI_Task()` 重命名为 `USER_UI_LegacyTask()`，避免和新 `user_ui_core.c` 的 `USER_UI_Task()` 重复定义。
   - 工程切换后，应使用本文件替代直接编译 `../user_ui.c`。
-  - 后续当 sensors 等页面逐步迁移到独立文件后，本包装文件可以删除。
+  - 后续当 Camera、IMU Sum 等页面逐步迁移到独立文件后，本包装文件可以删除。
 
 - `user_ui_route_context.c`
   - 路线启动交互 context。
@@ -56,6 +57,12 @@
   - 新 Motor Control 页面实现。
   - 已从 legacy `user_ui.c` 抽出电机模式、目标速度、实际速度、误差、积分、微分和 PWM 显示。
   - 页面注册表中的 `PAGE_MOTOR` 已切到该文件的新函数。
+
+- `user_ui_page_sensors.c`
+  - 新 Sensors 页面实现集合。
+  - 已迁移 Encoder、Photoelectric、ADC、LiDAR、Gyroscope/IMU 基础数据页面。
+  - Encoder、Photoelectric、LiDAR、Gyroscope 的交互逻辑已改为注册表 `on_key()` 回调；动态刷新函数不再直接读取底层按键。
+  - ADC 为纯显示页，注册表中不配置 `on_key()`。
 
 - `user_ui_page_actuator.c`
   - 新 Actuator 页面实现。
@@ -94,13 +101,13 @@ python tools/migrate_iar_ui_core.py
 
 1. 在 IAR C include path 中加入 `$PROJ_DIR$\User_Application\UI`。
 2. 将 `User_Application\user_ui.c` 编译项替换为 `User_Application\UI\user_ui_legacy_pages.c`。
-3. 新增 `User_Application_UI` 分组，加入 `user_ui_core.c`、`user_ui_core_state.c`、`user_ui_dispatch.c`、`user_ui_input.c`、`user_ui_pages.c`、`user_ui_route_context.c` 以及当前已稳定的新页面文件，包括 `user_ui_page_motor.c`。
+3. 新增 `User_Application_UI` 分组，加入 `user_ui_core.c`、`user_ui_core_state.c`、`user_ui_dispatch.c`、`user_ui_input.c`、`user_ui_pages.c`、`user_ui_route_context.c` 以及当前已稳定的新页面文件，包括 `user_ui_page_motor.c` 和 `user_ui_page_sensors.c`。
 
 脚本保持 `Minimal_Bringup` 配置排除应用层 UI 文件，和现有工程配置语义一致。执行后建议用 IAR 打开 `basic.eww`，确认 Debug 配置下只存在一个 `USER_UI_Task()`。
 
 ## 当前迁移边界
 
-新 `user_ui_core.c`、`user_ui_page_motor.c`、`user_ui_page_actuator.c`、`user_ui_page_debug.c`、`user_ui_page_route.c`、`user_ui_pages.c` 等文件已经准备好。旧页面绘制函数仍通过 `user_ui_legacy_pages.c` 过渡复用。
+新 `user_ui_core.c`、`user_ui_page_motor.c`、`user_ui_page_sensors.c`、`user_ui_page_actuator.c`、`user_ui_page_debug.c`、`user_ui_page_route.c`、`user_ui_pages.c` 等文件已经准备好。旧页面绘制函数仍通过 `user_ui_legacy_pages.c` 过渡复用。
 
 工程切换时的目标状态是：
 
@@ -138,8 +145,4 @@ User_Application/UI/
 
 1. 每次只迁移一组页面，保证每一步都可编译。
 2. 外部模块不要依赖页面枚举和页面绘制函数。
-3. 页面内按键不要直接抢读所有按键，后续应由 `user_ui_core.c` 统一消费并分发。
-4. UnitTest 页面应作为独立页面新增，不再复用 `PAGE_CAMERA`。
-5. 修改 IAR 工程文件前，先确保新增 `.c` 文件职责稳定。
-6. legacy `user_ui.c` 中的页面标题数组和两个页面分发 `switch` 后续应替换为 `user_ui_dispatch.c` helper。
-7. legacy `user_ui.c` 后续应降级为 legacy 页面绘制文件，不再保留 UI 主循环入口。
+3. 新页面的动态刷新函数只负责显示数据，不直接消费底层按键；交互统一放在注册表 `on_key()` 回调中。

@@ -79,7 +79,7 @@ static void USER_Heartbeat_Task(void)
  */
 static void USER_RegisterSchedulerTasks(void)
 {
-  (void)USER_OS_RegisterTask("global", USER_GlobalData_Task, 1u, 0u, 1u);
+  (void)USER_OS_RegisterTask("global", USER_GlobalData_Task, 1u, 0u, 0u);
   (void)USER_OS_RegisterTask("state", USER_State_Task, 10u, 3u, 1u);
   (void)USER_OS_RegisterTask("mcm", USER_MCM_Task, 10u, 4u, 2u);
   (void)USER_OS_RegisterTask("race", USER_Race_Task, 10u, 5u, 3u);

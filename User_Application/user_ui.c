@@ -1,4 +1,5 @@
 #include "user_ui.h"
+#include "user_os.h"
 
 /**
  * @file user_ui.c
@@ -19,13 +20,13 @@ static const char *const page_titles[DISPLAY_PAGE_COUNT] = {
     "IMU Data     ",
     "Smart Camera ",
     "Servo Control",
-    "Debug Info   ",
+    "Threads      ",
     "IMU Sum Data ",
     "Template Path"};
 
 /* ---- 比赛启动交互状态 ---- */
 #define UI_CHARGE_TIME_MS 2000u /* 长按蓄力时长：2 秒 */
-#define UI_COUNTDOWN_MS 1000u   /* 蓄力完成后的倒计时：1 秒 */
+#define UI_COUNTDOWN_MS 2000u   /* 蓄力完成后的稳定倒计时：2 秒，小车离手稳定 */
 #define UI_CIRCLE_CENTER_X 96u  /* 蓄力圆圆心 X */
 #define UI_CIRCLE_CENTER_Y 28u  /* 蓄力圆圆心 Y */
 #define UI_CIRCLE_RADIUS 14u    /* 蓄力圆半径 */
@@ -69,7 +70,7 @@ void USER_UI_Task(void)
         /* 蓄力未满且仍在按住：由 ShowTemplateDynamic 绘制动画 */
     }
 
-    /* 倒计时阶段：圆形已满，下方显示毫秒倒计时 */
+    /* 倒计时阶段：下方显示毫秒倒计时 */
     if (ui_countdown_active)
     {
         if (ui_countdown_remain_ms > 0u)
@@ -752,15 +753,66 @@ void USER_UI_ShowServoDynamic(void)
 }
 
 /* ================================================================
- *  第 9 页：调试信息（占位）
+ *  第 9 页：线程运行用时（Threads）
+ *
+ *  布局：
+ *    第 0 行 : 页面标题栏（由 ShowStaticContent 统一绘制）
+ *    第 1 行 : 列标题 TASK / L(ast) / M(ax)
+ *    第 2-7 行 : 各线程名称 + 最近一次运行耗时 + 历史最大耗时（单位 us）
+ *
+ *  显示格式：name     L:XXXX M:XXXX
  * ================================================================ */
 
 void USER_UI_ShowDebugStatic(void)
 {
+    /* 列标题 */
+    USER_OLED_putString(1, 0, "TASK       L/us  M/us", 21);
 }
 
 void USER_UI_ShowDebugDynamic(void)
 {
+    static uint8_t update_row = 0u;
+    uint8_t task_count;
+    uint8_t i;
+    uint8_t row;
+    USER_OS_TaskStats_t stats;
+    char line_buf[22];
+
+    task_count = USER_OS_GetTaskCount();
+
+    /* 轮询刷新：每个周期只更新一行，降低 OLED 刷新开销 */
+    if (task_count > 0u)
+    {
+        update_row++;
+        if (update_row >= task_count)
+        {
+            update_row = 0u;
+        }
+
+        i = update_row;
+        row = i + 2u; /* 数据行从第 2 行开始 */
+
+        if (USER_OS_GetTaskStats(i, &stats))
+        {
+            /* 限制显示范围，避免越界 */
+            if (stats.last_cost_us > 9999u)
+            {
+                stats.last_cost_us = 9999u;
+            }
+            if (stats.max_cost_us > 9999u)
+            {
+                stats.max_cost_us = 9999u;
+            }
+
+            /* 格式：name     L:XXXX M:XXXX */
+            (void)snprintf(line_buf, sizeof(line_buf),
+                           "%-8s L:%4u M:%4u",
+                           (stats.name != NULL) ? stats.name : "?",
+                           (uint16_t)stats.last_cost_us,
+                           (uint16_t)stats.max_cost_us);
+            USER_OLED_putString(row, 0u, line_buf, 21u);
+        }
+    }
 }
 
 /* ================================================================
@@ -813,124 +865,295 @@ void USER_UI_ShowIMUSumDynamic(void)
         break;
     }
 }
-
 /* ================================================================
  *  第 11 页：比赛路线（模板路径）
  *
  *  布局：
- *    第 0 行    : "Route 00" 路线编号
- *    左半屏     : 路径示意图（根据选中路线绘制）
- *    右半屏上方 : 蓄力圆形（长按 ENTER 时从外向内填充，2 秒满）
- *    右半屏下方 : 倒计时毫秒数（蓄力满后显示，1 秒倒计时）
+ *    第 0 行 : 统一页面标题栏，由 USER_UI_ShowStaticContent() 绘制。
+ *    左侧区域: 左半屏除标题栏外全部用于显示路线示意图。
+ *    右侧第 2 行 : 路线号与路线名称。
+ *    右侧第 3 行 : 长按启动提示 / GO 状态
+ *    右侧第 4 行：进度条。
+ *    右侧第 5 行 : 当前执行步骤与主要参数。
+ *    右侧第 6 行 : 当前步骤剩余超时。
  *
  *  交互流程：
- *    IDLE → 按下 ENTER → CHARGING（圆形逐圈填充 2s）
+ *    IDLE → 按下 ENTER → CHARGING（长按 2s 进度条充满）
  *         → 提前松开 → IDLE（取消）
- *         → 2s 满 → COUNTDOWN（1s 倒计时）→ 启动路线
+ *         → 2s 满 → STABILIZE（2s 稳定倒计时，TMO 2000→0，S-- START）→ 启动路线
  * ================================================================ */
 
+/* ---- Route 页面布局参数 ---- */
+#define UI_ROUTE_MAP_X 0u  // 左侧区域起始 X 坐标
+#define UI_ROUTE_MAP_Y 0u  // 左侧区域起始 Y 坐标
+#define UI_ROUTE_MAP_W 60u // 左侧区域宽度
+#define UI_ROUTE_MAP_H 54u // 左侧区域高度
+
+#define UI_ROUTE_INFO_COL 10u // 右侧信息列起始 X 坐标
+#define UI_ROUTE_BAR_X 70u    // 进度条起始 X 坐标
+#define UI_ROUTE_BAR_Y 26u    // 进度条起始 Y 坐标
+#define UI_ROUTE_BAR_W 42u    // 进度条宽度
+#define UI_ROUTE_BAR_H 6u     // 进度条高度
+
 /**
- * @brief 绘制模板路线的路径示意图（左半屏）。
+ * @brief 计算 int16_t 的绝对值.
  *
- * 模板路线：直行 → U 型掉头 → 直行返回 → U 型掉头回原位。
- * 使用线条和圆弧在屏幕左侧 (x:0~63, y:10~63) 绘制俯视轨迹。
+ * @param value 输入值.
+ *
+ * @return 绝对值结果.
+ */
+static uint16_t USER_UI_AbsI16(int16_t value)
+{
+    if (value < 0)
+    {
+        return (uint16_t)(-value);
+    }
+
+    return (uint16_t)value;
+}
+
+/**
+ * @brief 绘制模板路线的示意图.
+ *
+ * @note 本函数将左侧除标题栏外的空间尽量占满，
+ *       仅用于表达路线结构，不要求严格按实际比例绘制.
  */
 static void USER_UI_DrawTemplatePath(void)
 {
-    /* 左车道竖线：前进路径 (x=20, y=18~30) */
-    USER_OLED_DrawLine(20, 18, 20, 30);
-    /* 右车道竖线：返回路径 (x=35, y=18~30) */
-    USER_OLED_DrawLine(35, 18, 35, 30);
+    const uint8_t left_x = 10u;
+    const uint8_t right_x = 42u;
+    const uint8_t top_y = 14u;
+    const uint8_t bottom_y = 56u;
+    const uint8_t center_x = 26u;
+    const uint8_t radius = 16u;
 
-    /* 顶部 U 型掉头 —— 从前进车道转到返回车道 */
-    USER_OLED_DrawArc(27, 18, 8, 0, 180);
+    /* 第一步：绘制左侧区域边框，占满左半屏 */
+    USER_OLED_DrawRect(UI_ROUTE_MAP_X,
+                       UI_ROUTE_MAP_Y,
+                       UI_ROUTE_MAP_X + UI_ROUTE_MAP_W - 1u,
+                       UI_ROUTE_MAP_Y + UI_ROUTE_MAP_H - 1u,
+                       false);
 
-    /* 底部 U 型掉头 —— 从返回车道转回前进车道 */
-    USER_OLED_DrawArc(27, 30, 8, 180, 360);
+    /* 第二步：绘制两条主竖线，增大纵向利用率 */
+    USER_OLED_DrawVLine(left_x, top_y, bottom_y);
+    USER_OLED_DrawVLine(right_x, top_y, bottom_y);
 
-    /* 前进方向箭头（左车道中间） */
-    USER_OLED_DrawLine(18, 22, 20, 20);
-    USER_OLED_DrawLine(22, 22, 20, 20);
+    /* 第三步：绘制顶部和底部 U 型连接，形成往返路线示意 */
+    USER_OLED_DrawArc(center_x, top_y, radius, 0, 180);
+    USER_OLED_DrawArc(center_x, bottom_y, radius, 180, 360);
 
-    /* 返回方向箭头（右车道中间） */
-    USER_OLED_DrawLine(33, 26, 35, 28);
-    USER_OLED_DrawLine(37, 26, 35, 28);
+    /* 第四步：绘制方向箭头 */
+    USER_OLED_DrawLine(left_x, 28u, (uint8_t)(left_x - 3u), 32u);
+    USER_OLED_DrawLine(left_x, 28u, (uint8_t)(left_x + 3u), 32u);
 
-    /* 底部标注：起点/终点 */
-    USER_OLED_putString(7, 0, "S/F", 3);
+    USER_OLED_DrawLine(right_x, 42u, (uint8_t)(right_x - 3u), 38u);
+    USER_OLED_DrawLine(right_x, 42u, (uint8_t)(right_x + 3u), 38u);
 }
 
 /**
- * @brief 绘制蓄力进度圆（右半屏上方）。
+ * @brief 绘制 Route 页面进度条.
  *
- * 使用同心填充圆实现"从外向内填充"效果：
- * - 始终绘制最外圈轮廓（radius = Rmax）
- * - 随着进度增加，从 Rmax 向圆心逐层填充实心圆
- * - 进度 100% 时整个圆被填满
- *
- * @param progress 蓄力进度 0~100。
+ * @param percent 百分比，范围 0~100.
  */
-static void USER_UI_DrawChargeCircle(uint8_t progress)
+static void USER_UI_DrawRouteProgressBar(uint8_t percent)
 {
-    uint8_t r;
+    uint8_t fill_w;
 
-    /* 限制进度范围 */
-    if (progress > 100u)
-        progress = 100u;
-
-    /* 从外向内逐层填充：填充半径从 Rmax 递减到 Rmax*(1 - progress/100) */
-    uint8_t inner_r = (uint8_t)(((uint16_t)UI_CIRCLE_RADIUS * (100u - progress)) / 100u);
-
-    for (r = UI_CIRCLE_RADIUS; r > inner_r; r--)
+    /* 第一步：限制百分比范围 */
+    if (percent > 100u)
     {
-        USER_OLED_DrawCircle(UI_CIRCLE_CENTER_X, UI_CIRCLE_CENTER_Y, r, true);
+        percent = 100u;
     }
 
-    /* 绘制最外圈轮廓线，确保边界清晰 */
-    if (progress < 100u)
+    /* 第二步：计算内部填充宽度 */
+    fill_w = (uint8_t)(((uint16_t)(UI_ROUTE_BAR_W - 2u) * percent) / 100u);
+
+    /* 第三步：绘制进度条边框 */
+    USER_OLED_DrawRect(UI_ROUTE_BAR_X,
+                       UI_ROUTE_BAR_Y,
+                       UI_ROUTE_BAR_X + UI_ROUTE_BAR_W - 1u,
+                       UI_ROUTE_BAR_Y + UI_ROUTE_BAR_H - 1u,
+                       false);
+
+    /* 第四步：绘制进度条填充 */
+    if (fill_w > 0u)
     {
-        USER_OLED_DrawCircle(UI_CIRCLE_CENTER_X, UI_CIRCLE_CENTER_Y, UI_CIRCLE_RADIUS, false);
+        USER_OLED_DrawRect(UI_ROUTE_BAR_X + 1u,
+                           UI_ROUTE_BAR_Y + 1u,
+                           UI_ROUTE_BAR_X + fill_w,
+                           UI_ROUTE_BAR_Y + UI_ROUTE_BAR_H - 2u,
+                           true);
     }
 }
 
+/**
+ * @brief 将当前动作格式化为适合 OLED 显示的短文本.
+ *
+ * @param action_ptr 动作指针.
+ * @param step_index 当前步骤索引，从 0 开始.
+ * @param out_buf 输出缓冲区.
+ * @param out_len 输出缓冲区长度.
+ */
+static void USER_UI_FormatRouteStepText(const USER_Race_Action_t *action_ptr,
+                                        int16_t step_index,
+                                        char *out_buf,
+                                        uint8_t out_len)
+{
+    uint16_t main_value = 0u;
+    uint8_t step_no;
+
+    if ((out_buf == NULL) || (out_len == 0u))
+    {
+        return;
+    }
+
+    /* 第一步：没有有效动作时显示空闲状态 */
+    if ((action_ptr == NULL) || (step_index < 0))
+    {
+        (void)snprintf(out_buf, out_len, "S-- IDLE");
+        return;
+    }
+
+    step_no = (uint8_t)(step_index + 1u);
+
+    /* 第二步：根据动作类型格式化文本 */
+    switch (action_ptr->action_type)
+    {
+    case USER_Race_ACTION_MOVE_DISTANCE:
+        /* mm 转 cm，正值表示前进，负值表示后退 */
+        main_value = (uint16_t)(USER_UI_AbsI16((int16_t)action_ptr->param1) / 10u);
+        if (action_ptr->param1 >= 0.0f)
+        {
+            (void)snprintf(out_buf, out_len, "S%02u FW %u", step_no, main_value);
+        }
+        else
+        {
+            (void)snprintf(out_buf, out_len, "S%02u BW %u", step_no, main_value);
+        }
+        break;
+
+    case USER_Race_ACTION_ROTATE_ANGLE:
+        /* deg 保持不变，正值右转，负值左转 */
+        main_value = USER_UI_AbsI16((int16_t)action_ptr->param1);
+        if (action_ptr->param1 >= 0.0f)
+        {
+            (void)snprintf(out_buf, out_len, "S%02u TR %u", step_no, main_value);
+        }
+        else
+        {
+            (void)snprintf(out_buf, out_len, "S%02u TL %u", step_no, main_value);
+        }
+        break;
+
+    case USER_Race_ACTION_WAIT_MS:
+        main_value = (uint16_t)action_ptr->param1;
+        (void)snprintf(out_buf, out_len, "S%02u WT %u", step_no, main_value);
+        break;
+
+    case USER_Race_ACTION_STOP:
+        (void)snprintf(out_buf, out_len, "S%02u STP", step_no);
+        break;
+
+    case USER_Race_ACTION_END:
+        (void)snprintf(out_buf, out_len, "S%02u END", step_no);
+        break;
+
+    default:
+        (void)snprintf(out_buf, out_len, "S%02u N/A", step_no);
+        break;
+    }
+}
+
+/**
+ * @brief 获取 Route 页面当前应显示的动作信息.
+ *
+ * @param action_ptr 输出动作.
+ * @param step_index_ptr 输出步骤索引.
+ * @param timeout_remain_ptr 输出剩余超时.
+ *
+ * @return true 表示存在有效动作；false 表示当前没有有效动作.
+ */
+static bool USER_UI_GetRouteDisplayAction(USER_Race_Action_t *action_ptr,
+                                          int16_t *step_index_ptr,
+                                          uint32_t *timeout_remain_ptr)
+{
+    bool has_action;
+
+    /* 第一步：优先显示当前实际运行中的动作 */
+    has_action = USER_Race_GetCurrentAction(action_ptr, step_index_ptr, timeout_remain_ptr);
+    if (has_action)
+    {
+        return true;
+    }
+
+    /* 第二步：若当前未运行，则显示模板路线首个动作作为预览 */
+    has_action = USER_Race_GetTemplatePreviewAction(action_ptr, timeout_remain_ptr);
+    if (has_action)
+    {
+        if (step_index_ptr != NULL)
+        {
+            *step_index_ptr = 0;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * @brief 绘制 Route 页面静态内容.
+ */
 void USER_UI_ShowTemplateStatic(void)
 {
-    /* 第 0 行：路线编号 */
-    USER_OLED_putString(0, 0, "Route ", 6);
-    USER_OLED_putUI16(0, 6, RACE_ROUTE_TEMPLATE, 2);
-
-    /* 左半屏：路径示意图 */
+    /* 第一步：绘制左侧路线示意图 */
     USER_UI_DrawTemplatePath();
+
+    /* 第二步：绘制右侧固定内容占位 */
+    USER_OLED_putString(2, UI_ROUTE_INFO_COL, "R00     ", 11); // 不能超过11字符
+
+    /* 第三行：HOLD*/
+    USER_OLED_putString(3, UI_ROUTE_INFO_COL, "HOLD", 4);
+    USER_UI_DrawRouteProgressBar(0u);
+
+    /* 第五行：步骤摘要 */
+    USER_OLED_putString(5, UI_ROUTE_INFO_COL, "S-- IDLE", 8); // 不能超过11字符
+
+    /* 第六行：超时剩余 */
+    USER_OLED_putString(6, UI_ROUTE_INFO_COL, "TMO ----", 8); // 不能超过11字符
 }
 
+/**
+ * @brief 绘制 Route 页面动态内容.
+ */
 void USER_UI_ShowTemplateDynamic(void)
 {
-    uint16_t press_time = button_press_time[ENTER]; /* 当前 ENTER 连续按下时长 */
+    static bool buzzer_triggered = false;
+    uint16_t press_time = button_press_time[ENTER];
+    uint8_t progress = 0u;
+    USER_Race_Action_t action;
+    int16_t step_index = -1;
+    uint32_t timeout_remain_ms = 0u;
+    char step_text[13];
+    bool has_action = false;
 
-    /* ======== 状态 1：IDLE —— 等待按下 ENTER ======== */
+    /* 第一步：若当前未处于蓄力或倒计时状态，检测是否开始长按 */
     if (!ui_charging_active && !ui_countdown_active)
     {
-        /* 右下角操作提示 */
-        USER_OLED_putString(7, 0, "Hold ENTER 2s to run", 21);
-
-        /* ENTER 刚按下：进入蓄力状态 */
         if (press_time > 0u)
         {
             ui_charging_active = true;
             ui_pending_route = RACE_ROUTE_TEMPLATE;
 
-            /* 重绘静态内容以清除提示文字 */
+            /* 重新清屏并绘制静态内容，避免旧内容残留 */
             USER_OLED_CleanScreen();
-            USER_UI_ShowTemplateStatic();
+            USER_UI_ShowStaticContent(PAGE_TEMPLATE);
+            return;
         }
-        return;
     }
 
-    /* ======== 状态 2：CHARGING —— ENTER 按住中，圆形逐圈填充 ======== */
+    /* 第二步：计算长按启动进度 */
     if (ui_charging_active)
     {
-        uint8_t progress;
-
         if (press_time >= UI_CHARGE_TIME_MS)
         {
             progress = 100u;
@@ -939,38 +1162,90 @@ void USER_UI_ShowTemplateDynamic(void)
         {
             progress = (uint8_t)(((uint32_t)press_time * 100u) / UI_CHARGE_TIME_MS);
         }
-
-        /* 绘制蓄力圆 */
-        USER_UI_DrawChargeCircle(progress);
-
-        /* 圆下方显示蓄力进度百分比 */
-        USER_OLED_putUI16(6, 16, (uint16_t)progress, 3);
-        USER_OLED_putString(6, 19, "%", 1);
-
-        /* 状态切换由 USER_UI_Task() 检测 press_time >= UI_CHARGE_TIME_MS 完成 */
+    }
+    else if (ui_countdown_active)
+    {
+        progress = 100u;
+    }
+    else
+    {
+        progress = 0u;
     }
 
-    /* ======== 状态 3：COUNTDOWN —— 蓄力满，倒计时 ======== */
+    /* 第三步：刷新路线号和名称 */
+    USER_OLED_putString(2, UI_ROUTE_INFO_COL, "           ", 11);
+    USER_OLED_putString(2, UI_ROUTE_INFO_COL, "R00 ", 4);
+    USER_OLED_putString(2, UI_ROUTE_INFO_COL + 4u,
+                        USER_Race_GetRouteName(RACE_ROUTE_TEMPLATE),
+                        7); // 不能超过7字符
+
+    /* 第四步：刷新第三行状态显示 */
+    USER_OLED_putString(3, UI_ROUTE_INFO_COL, "    ", 4);
     if (ui_countdown_active)
     {
-        /* 绘制满圆 */
-        USER_UI_DrawChargeCircle(100u);
+        /* 稳定倒计时阶段：小车离手稳定，显示 HOLD */
+        USER_OLED_putString(3, UI_ROUTE_INFO_COL, "HOLD", 4);
+    }
+    else
+    {
+        /* 空闲和长按阶段显示 HOLD */
+        USER_OLED_putString(3, UI_ROUTE_INFO_COL, "HOLD", 4);
+    }
 
-        /* 圆下方显示倒计时毫秒数 */
-        USER_OLED_putString(5, 16, "GO!", 3);
-        USER_OLED_putUI16(6, 15, ui_countdown_remain_ms, 4);
-        USER_OLED_putString(6, 19, "ms", 2);
+    /* 第五步：刷新进度条 */
+    USER_UI_DrawRouteProgressBar(progress);
 
-        /* 蜂鸣器提示（仅倒计时开始时触发一次） */
-        static bool buzzer_triggered = false;
-        if (!buzzer_triggered)
+    /* 第六步：刷新当前执行动作摘要 */
+    if (ui_countdown_active)
+    {
+        /* 稳定倒计时阶段：固定显示 S-- START */
+        USER_OLED_putString(5, UI_ROUTE_INFO_COL, "             ", 13);
+        USER_OLED_putString(5, UI_ROUTE_INFO_COL, "S-- START", 9);
+    }
+    else
+    {
+        has_action = USER_UI_GetRouteDisplayAction(&action, &step_index, &timeout_remain_ms);
+        if (has_action)
         {
-            USER_LBB_Buzzer_On(100);
-            buzzer_triggered = true;
+            USER_UI_FormatRouteStepText(&action, step_index, step_text, sizeof(step_text));
         }
-        if (ui_countdown_remain_ms == 0u)
+        else
         {
-            buzzer_triggered = false;
+            USER_UI_FormatRouteStepText(NULL, -1, step_text, sizeof(step_text));
         }
+
+        USER_OLED_putString(5, UI_ROUTE_INFO_COL, "             ", 13);
+        USER_OLED_putString(5, UI_ROUTE_INFO_COL, step_text, 12);
+    }
+
+    /* 第七步：刷新当前步骤超时剩余 */
+    USER_OLED_putString(6, UI_ROUTE_INFO_COL, "TMO ", 4);
+    if (ui_countdown_active)
+    {
+        /* 稳定倒计时阶段：显示 TMO 从 2000 递减到 0 */
+        USER_OLED_putUI16(6, UI_ROUTE_INFO_COL + 4u, ui_countdown_remain_ms, 4);
+    }
+    else if (has_action)
+    {
+        if (timeout_remain_ms > 9999u)
+        {
+            timeout_remain_ms = 9999u;
+        }
+        USER_OLED_putUI16(6, UI_ROUTE_INFO_COL + 4u, (uint16_t)timeout_remain_ms, 4);
+    }
+    else
+    {
+        USER_OLED_putString(6, UI_ROUTE_INFO_COL + 4u, "----", 4);
+    }
+
+    /* 第八步：倒计时开始时蜂鸣一次 */
+    if (ui_countdown_active && !buzzer_triggered)
+    {
+        USER_LBB_Buzzer_On(100);
+        buzzer_triggered = true;
+    }
+    else if (!ui_countdown_active)
+    {
+        buzzer_triggered = false;
     }
 }

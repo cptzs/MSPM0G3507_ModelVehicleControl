@@ -78,6 +78,11 @@ typedef struct
     USER_UI_PageKeyFunc_t on_key;
 } USER_UI_PageDef_t;
 
+const USER_UI_PageDef_t *USER_UI_GetPageTable(void);
+uint8_t USER_UI_GetPageCount(void);
+const USER_UI_PageDef_t *USER_UI_FindPage(DisplayPage_t page);
+const USER_UI_PageDef_t *USER_UI_GetPageByIndex(uint8_t index);
+
 /* ---- legacy 页面分发接口 ---- */
 void USER_UI_ShowStaticContent(DisplayPage_t page);
 void USER_UI_ShowDynamicContent(DisplayPage_t page);

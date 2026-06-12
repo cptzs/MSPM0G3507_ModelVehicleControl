@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define USER_OLED_FONT_EXTERNAL 1
+
 #define USER_FONT_ASCII_6X8_WIDTH   6u
 #define USER_FONT_ASCII_6X8_HEIGHT  8u
 #define USER_FONT_ASCII_6X8_COUNT   128u

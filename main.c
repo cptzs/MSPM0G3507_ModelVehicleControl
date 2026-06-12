@@ -32,13 +32,13 @@
 #include "userlib_servo.h"
 
 /* 用户应用头文件 */
-#include "User_UI/user_ui_public.h"
+#include "user_ui_public.h"
 #include "userapp_mcm.h"
 #include "userapp_race.h"
 #include "userapp_state_estimator.h"
 
 /* 协作式 1ms 调度器 */
-#include "User_OS/user_os.h"
+#include "user_os.h"
 
 #include "globals.h"
 

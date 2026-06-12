@@ -143,6 +143,9 @@ void USER_UI_ShowTemplateStatic(void);
 void USER_UI_ShowTemplateDynamic(void);
 
 /* ---- 新分层页面 ---- */
+void USER_UI_ShowRouteStatic(void);
+void USER_UI_ShowRouteDynamic(void);
+void USER_UI_RouteOnKey(Button_t key, USER_UI_KeyEvent_t event);
 void USER_UI_ShowUnitTestStatic(void);
 void USER_UI_ShowUnitTestDynamic(void);
 void USER_UI_UnitTestOnKey(Button_t key, USER_UI_KeyEvent_t event);

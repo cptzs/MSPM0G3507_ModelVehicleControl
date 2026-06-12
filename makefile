@@ -32,7 +32,7 @@ USER_C_FILES = \
     User_Devices/userlib_motor.c \
     User_Devices/userlib_oemt_an.c \
     User_Devices/userlib_oemt_dg.c \
-    User_Devices/userlib_oled.c \
+    User_Devices/userlib_oled_fast.c \
     User_Devices/userlib_servo.c \
     User_Peripheral/userlib_adc.c \
     User_Peripheral/userlib_can.c \

@@ -35,6 +35,7 @@ UI_SOURCE_FILES = [
     r"$PROJ_DIR$\User_Application\UI\user_ui_input.c",
     r"$PROJ_DIR$\User_Application\UI\user_ui_pages.c",
     r"$PROJ_DIR$\User_Application\UI\user_ui_route_context.c",
+    r"$PROJ_DIR$\User_Application\UI\user_ui_page_motor.c",
     r"$PROJ_DIR$\User_Application\UI\user_ui_page_actuator.c",
     r"$PROJ_DIR$\User_Application\UI\user_ui_page_debug.c",
     r"$PROJ_DIR$\User_Application\UI\user_ui_page_route.c",

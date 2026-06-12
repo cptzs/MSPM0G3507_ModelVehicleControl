@@ -1,5 +1,6 @@
 #include "user_os.h"
 
+#include "userlib_lbb.h"
 #include "userlib_sys.h"
 
 #include <stddef.h>
@@ -26,9 +27,12 @@ typedef struct
     uint32_t max_cost_us;
 } USER_OS_TaskControlBlock_t;
 
+#define USER_OS_STATS_VISIBLE_ROWS 6u
+
 static volatile uint32_t os_tick = 0u;
 static USER_OS_TaskControlBlock_t os_tasks[USER_OS_MAX_TASKS];
 static uint8_t os_task_count = 0u;
+static uint8_t os_stats_scroll_top = 0u;
 
 /**
  * @brief 判断 now 是否已经到达 target，支持 uint32_t 回绕。
@@ -86,6 +90,68 @@ static uint32_t USER_OS_GetTimeUs(void)
     }
 
     return (tick_before * 1000u) + (elapsed_cycles / cycles_per_us);
+}
+
+/**
+ * @brief 获取线程统计页当前可显示的任务行数。
+ *
+ * OLED 线程页第 2~7 行只能显示 6 个任务；任务数超过 6 时通过
+ * os_stats_scroll_top 建立显示窗口，避免 UI 写到第 8 行以外。
+ */
+static uint8_t USER_OS_GetStatsVisibleCount(void)
+{
+    if (os_task_count > USER_OS_STATS_VISIBLE_ROWS)
+    {
+        return USER_OS_STATS_VISIBLE_ROWS;
+    }
+
+    return os_task_count;
+}
+
+/**
+ * @brief 处理线程统计页的上下滚动事件。
+ *
+ * USER_UI_ShowDebugDynamic() 每次刷新都会先调用 USER_OS_GetTaskCount()；
+ * 因此在这里消费 UP / DOWN 事件，可以在不改动页面框架的情况下完成滚动窗口更新。
+ */
+static void USER_OS_UpdateStatsScroll(void)
+{
+    uint8_t max_top;
+    ButtonState_t button_state;
+
+    if (os_task_count <= USER_OS_STATS_VISIBLE_ROWS)
+    {
+        os_stats_scroll_top = 0u;
+        return;
+    }
+
+    max_top = (uint8_t)(os_task_count - USER_OS_STATS_VISIBLE_ROWS);
+
+    button_state = USER_LBB_Button_ReadState(UP);
+    if ((button_state == PRESSED) || (button_state == LONG_PRESSED))
+    {
+        if (os_stats_scroll_top == 0u)
+        {
+            os_stats_scroll_top = max_top;
+        }
+        else
+        {
+            os_stats_scroll_top--;
+        }
+    }
+
+    button_state = USER_LBB_Button_ReadState(DOWN);
+    if ((button_state == PRESSED) || (button_state == LONG_PRESSED))
+    {
+        if (os_stats_scroll_top >= max_top)
+        {
+            os_stats_scroll_top = 0u;
+        }
+        else
+        {
+            os_stats_scroll_top++;
+        }
+    }
 }
 
 /**
@@ -166,6 +232,7 @@ void USER_OS_Init(void)
 
     os_tick = 0u;
     os_task_count = 0u;
+    os_stats_scroll_top = 0u;
 
     for (i = 0u; i < USER_OS_MAX_TASKS; i++)
     {
@@ -290,13 +357,20 @@ bool USER_OS_SetTaskEnabled(uint8_t task_id, bool enabled)
 bool USER_OS_GetTaskStats(uint8_t task_id, USER_OS_TaskStats_t *stats)
 {
     USER_OS_TaskControlBlock_t *tcb;
+    uint8_t real_task_id;
 
-    if ((stats == NULL) || (task_id >= os_task_count) || (!os_tasks[task_id].used))
+    if ((stats == NULL) || (task_id >= USER_OS_GetStatsVisibleCount()))
     {
         return false;
     }
 
-    tcb = &os_tasks[task_id];
+    real_task_id = (uint8_t)(task_id + os_stats_scroll_top);
+    if ((real_task_id >= os_task_count) || (!os_tasks[real_task_id].used))
+    {
+        return false;
+    }
+
+    tcb = &os_tasks[real_task_id];
     stats->name = tcb->name;
     stats->period_ms = tcb->period_ms;
     stats->offset_ms = tcb->offset_ms;
@@ -315,7 +389,8 @@ bool USER_OS_GetTaskStats(uint8_t task_id, USER_OS_TaskStats_t *stats)
 
 uint8_t USER_OS_GetTaskCount(void)
 {
-    return os_task_count;
+    USER_OS_UpdateStatsScroll();
+    return USER_OS_GetStatsVisibleCount();
 }
 
 uint32_t USER_OS_GetTick(void)

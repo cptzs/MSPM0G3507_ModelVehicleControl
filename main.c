@@ -74,8 +74,19 @@ static void USER_Heartbeat_Task(void)
 /**
  * @brief 注册第一版协作式伪 RTOS 任务表。
  *
- * priority 数值越小优先级越高。offset 用于错峰，避免多个 10ms 任务在同一 tick
- * 集中运行。所有任务仍要求短小、非阻塞。
+ * @note 任务注册格式：
+ *       USER_OS_RegisterTask(name, task_func, period_ms, offset_ms, priority)
+ *
+ *       参数说明：
+ *       - name:       任务名称字符串，用于调试和统计。
+ *       - task_func:  任务函数指针，须短小、非阻塞。
+ *       - period_ms:  执行周期（毫秒），如 1u=每 tick 执行，500u=每 500ms 执行一次。
+ *       - offset_ms:  首次触发偏移（毫秒），用于错峰，避免多个同周期任务在同一 tick
+ *                     集中运行，降低瞬时 CPU 负载。
+ *       - priority:   调度优先级，数值越小优先级越高。在同一个 tick 内就绪的多个任务
+ *                     中，优先级高的先执行。
+ *
+ *       所有任务仍在 main while(1) 前台上下文中运行，不由独立栈或 PendSV 切换。
  */
 static void USER_RegisterSchedulerTasks(void)
 {
@@ -95,16 +106,15 @@ int main(void)
 {
   SYSCFG_DL_init();
 
-  USER_SYSTEM_Init();     /* 初始化系统时钟和系统滴答 */
-  USER_OS_Init();         /* 初始化 1ms 协作式调度器 */
-  USER_GlobalData_Init(); /* 初始化全局数据结构 */
-  USER_Device_Init();     /* 初始化用户外部设备 */
-
-  USER_STATE_Init(); /* 初始化统一车辆状态估计。 */
-  USER_RegisterSchedulerTasks();
+  USER_SYSTEM_Init();            /* 初始化系统时钟和系统滴答 */
+  USER_OS_Init();                /* 初始化 1ms 协作式调度器 */
+  USER_GlobalData_Init();        /* 初始化全局数据结构 */
+  USER_Device_Init();            /* 初始化用户外部设备 */
+  USER_STATE_Init();             /* 初始化统一车辆状态估计。 */
+  USER_RegisterSchedulerTasks(); /* 注册协作式调度器任务 */
 
   while (true)
   {
-    USER_OS_Run();
+    USER_OS_Run(); /* 运行调度器，调度器内会调用各个注册的任务函数 */
   }
 }

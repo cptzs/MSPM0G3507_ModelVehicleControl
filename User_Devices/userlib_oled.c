@@ -1,13 +1,58 @@
-/// @brief OLED_12864 driver core
-/// @note Font data is stored in userlib_fonts.c to keep this driver maintainable.
+/**
+ * @file    userlib_oled.c
+ * @brief   OLED 128×64 (SSD1306 / SH1106 兼容) 显示驱动核心。
+ *
+ * ============================================================================
+ * 概述
+ * ============================================================================
+ * 本文件实现了基于 SPI + DMA 的 OLED 单色显示屏驱动，包含：
+ *   - 硬件初始化 / 反初始化（SPI、DMA、GPIO）
+ *   - 全屏 GRAM 缓冲区管理与 DMA 连续刷新
+ *   - 基础图形绘制：点、水平线、垂直线、任意斜线、虚线、矩形、圆、圆弧
+ *   - 字符与数值格式化输出（字符串、十六进制、无符号/有符号整数、浮点数）
+ *   - 进度条（Bar）与波形（Wave）辅助显示
+ *   - 对比度、开关显示、反色等显示控制接口
+ *
+ * ============================================================================
+ * 缓冲区策略
+ * ============================================================================
+ * GRAM[8][128] 是片内全帧缓冲区，MCU 所有绘制均在 GRAM 中完成。
+ * SPI DMA 在后台持续将 GRAM 发送至 OLED，实现无撕裂刷新。
+ * 绘制函数仅修改 GRAM，不直接操作 OLED 硬件，因此可以批量更新后
+ * 由 DMA 自动同步到屏幕，减少 SPI 阻塞等待。
+ *
+ * ============================================================================
+ * 坐标系约定
+ * ============================================================================
+ * - X: 0 ~ 127（左→右），Y: 0 ~ 63（上→下）
+ * - Page: 0 ~ 7，每页 8 像素高（与 SSD1306 页地址模式对应）
+ * - GRAM[row][col] 中 row 使用翻转映射（7 - page），使 Y=0 对应屏幕顶部
+ * - 绘制 API 全部使用 X/Y 坐标，内部自行完成 page/bit 转换
+ *
+ * ============================================================================
+ * 字库加载策略
+ * ============================================================================
+ * FontLib 字库定义在独立的 userlib_fonts.c 中，通过 userlib_fonts.h 外部引用。
+ * 若工程未将 userlib_fonts.c 加入编译，可选择不定义 USER_OLED_FONT_EXTERNAL，
+ * 使本文件通过 #include "userlib_fonts.c" 内联引入字库。
+ * 推荐方式：定义 USER_OLED_FONT_EXTERNAL 并将 userlib_fonts.c 加入工程。
+ *
+ * ============================================================================
+ * 使用约束
+ * ============================================================================
+ * - 调用任何绘制 API 前须先调用 USER_OLED_Init() 完成初始化。
+ * - 所有绘制函数假定在非 ISR 上下文中调用；SPI ISR 仅负责 DMA 重传。
+ * - 浮点输出依赖 math.h (isnan/isinf)，需链接数学库（-lm 或等效配置）。
+ */
+
+/*===========================================================================
+ * 头文件包含
+ *===========================================================================*/
 
 #include "userlib_oled.h"
 #include "userlib_fonts.h"
 
-/* Keep OLED usable when the build system has not added userlib_fonts.c yet.
- * Define USER_OLED_FONT_EXTERNAL and compile userlib_fonts.c separately if a
- * project prefers a strict one-C-file-per-translation-unit layout.
- */
+/* 字库内联回退：若未定义 USER_OLED_FONT_EXTERNAL 则直接包含 .c 文件 */
 #ifndef USER_OLED_FONT_EXTERNAL
 #include "userlib_fonts.c"
 #endif
@@ -15,6 +60,10 @@
 #include <limits.h>
 #include <math.h>
 #include <string.h>
+
+/*===========================================================================
+ * 硬件相关宏定义
+ *===========================================================================*/
 
 #define CPU_FRQ ((uint32_t)80000000)
 #define BUS_FRQ ((uint32_t)80000000)
@@ -29,12 +78,20 @@
 #define SPI1_CH SPI_1_INST
 #define SPI1_DMA_CH DMA_CH_SPI0_TX_CHAN_ID
 
+/*===========================================================================
+ * OLED 面板属性宏
+ *===========================================================================*/
+
 #define OLED_WIDTH 128u
 #define OLED_HEIGHT 64u
 #define OLED_PAGE_COUNT 8u
 #define OLED_CHAR_WIDTH 6u
 #define OLED_CHARS_PER_ROW 21u
 #define OLED_DEFAULT_BRIGHTNESS 0xFFu
+
+/*===========================================================================
+ * SSD1306 命令码宏
+ *===========================================================================*/
 
 #define OLED_cmd_DisplayOFF 0xAEu
 #define OLED_cmd_DisplayON 0xAFu
@@ -63,6 +120,10 @@
 #define OLED_cmd_VirticalDirU2D 0xC8u
 #define OLED_cmd_VirticalDirD2U 0xC0u
 
+/*===========================================================================
+ * 全局缓冲区与状态变量
+ *===========================================================================*/
+
 uint8_t GRAM[OLED_PAGE_COUNT][OLED_WIDTH] = {0};
 uint8_t WaveRAM[OLED_WIDTH] = {0};
 uint8_t BarRAM[OLED_PAGE_COUNT] = {0};
@@ -71,7 +132,9 @@ static char str_temp[22] = {0};
 static uint8_t isOLED_Initialized = 0u;
 static uint8_t isOLED_AtWork = 0u;
 
-static void __User_OLED_Delay(uint16_t ms)
+/*===========================================================================
+ * 内部辅助函数：硬件抽象层
+ *===========================================================================*/
 {
   delay_cycles((uint32_t)CLK_PER_MS * ms);
 }
@@ -130,7 +193,13 @@ static void __User_OLED_Send(uint8_t data)
   __User_OLED_SPI_Transmit(&data, 1u, 10u);
 }
 
-static inline uint8_t USER_OLED_MakePointMask(uint8_t y)
+/*===========================================================================
+ * 内部辅助函数：像素位掩码与快速点操作
+ *
+ * GRAM 按页（page）组织，每页 8 个像素行。
+ * Y 坐标 b2..b0 决定在页内的 bit 位置（0x80 >> (y & 0x07)）。
+ * 行号 row = 7 - page，使得 Y=0 对应屏幕顶部。
+ *===========================================================================*/
 {
   return (uint8_t)(0x80u >> (y & 0x07u));
 }
@@ -163,7 +232,12 @@ static inline void USER_OLED_SetPointClipped(int16_t x, int16_t y)
   }
 }
 
-static inline void USER_OLED_DrawHLineFast(uint8_t x1, uint8_t x2, uint8_t y)
+/*===========================================================================
+ * 内部辅助函数：快速水平线 / 垂直线 / 矩形填充
+ *
+ * 这些 Fast 函数不做边界检查，由上层公开 API 保证参数合法性。
+ * 直接操作 GRAM，使用预计算的 page / mask 避免逐点计算开销。
+ *===========================================================================*/
 {
   const uint8_t row = (uint8_t)(7u - (y >> 3));
   const uint8_t mask = USER_OLED_MakePointMask(y);
@@ -245,6 +319,16 @@ static inline void USER_OLED_FillRectFast(uint8_t x1, uint8_t y1, uint8_t x2, ui
   }
 }
 
+/*===========================================================================
+ * OLED 初始化与反初始化
+ *
+ * USER_OLED_Init() 执行步骤：
+ *   1. 硬件初始化（SPI 时钟、DMA 通道、GPIO）
+ *   2. 硬件复位序列（NRST 引脚）
+ *   3. 发送 SSD1306 初始化命令序列（charge pump、对比度、扫描方向等）
+ *   4. 清空 GRAM / WaveRAM 缓冲区
+ *   5. 开启显示并启动 DMA 连续刷新
+ *===========================================================================*/
 OLED_Status_t USER_OLED_Init(void)
 {
   if (isOLED_Initialized)
@@ -252,7 +336,10 @@ OLED_Status_t USER_OLED_Init(void)
     return OLED_ERROR_INIT;
   }
 
+  /*--- 步骤1: 硬件初始化（SPI / DMA / GPIO） ---*/
   __User_OLED_HW_Init();
+
+  /*--- 步骤2: 硬件复位序列 NRST: H → L → H ---*/
   __User_OLED_GoNormal();
   __User_OLED_Delay(10u);
   __User_OLED_GoReset();
@@ -260,15 +347,19 @@ OLED_Status_t USER_OLED_Init(void)
   __User_OLED_GoNormal();
   __User_OLED_Delay(200u);
 
+  /*--- 步骤3: 发送 SSD1306 初始化命令序列 ---*/
   __User_OLED_SetTxMode_Cmd();
+
+  /* 3a. 电荷泵配置：先关闭再设对比度 */
   __User_OLED_Send(OLED_cmd_SetChgPump);
   __User_OLED_Send(OLED_cmd_ChgPump_OFF);
   __User_OLED_Send(OLED_cmd_DisplayOFF);
-  __User_OLED_Send(0x40u);
+  __User_OLED_Send(0x40u); /* 显示起始行 */
   __User_OLED_Send(0x00u);
   __User_OLED_Send(OLED_cmd_SetContrast);
   __User_OLED_Send(OLED_DEFAULT_BRIGHTNESS);
 
+  /* 3b. 扫描方向：根据 isReversed 选择正向或反向 */
   if (isReversed == OLED_Dir_Reverse)
   {
     __User_OLED_Send(OLED_cmd_VirticalDirD2U);
@@ -280,36 +371,46 @@ OLED_Status_t USER_OLED_Init(void)
     __User_OLED_Send(OLED_cmd_HorizonalDirL2R);
   }
 
+  /* 3c. 显示参数配置 */
   __User_OLED_Send(OLED_cmd_NormalDisplay);
-  __User_OLED_Send(OLED_cmd_SetComplexRatio);
+  __User_OLED_Send(OLED_cmd_SetComplexRatio); /* 复用比 */
   __User_OLED_Send(OLED_cmd_ComplexRatio_Normal);
-  __User_OLED_Send(OLED_cmd_SetVirticalShift);
+  __User_OLED_Send(OLED_cmd_SetVirticalShift); /* 垂直偏移 */
   __User_OLED_Send(OLED_cmd_VirticalShift_None);
-  __User_OLED_Send(OLED_cmd_SetMainClock);
+  __User_OLED_Send(OLED_cmd_SetMainClock); /* 主时钟 */
   __User_OLED_Send(0xF0u);
-  __User_OLED_Send(OLED_cmd_SetPrechgPeriod);
+  __User_OLED_Send(OLED_cmd_SetPrechgPeriod); /* 预充电周期 */
   __User_OLED_Send(OLED_cmd_PrechgPeriod_Normal);
-  __User_OLED_Send(OLED_cmd_SetComPinMode);
+  __User_OLED_Send(OLED_cmd_SetComPinMode); /* COM 引脚配置 */
   __User_OLED_Send(OLED_cmd_ComPinMode_Normal);
-  __User_OLED_Send(OLED_cmd_SetVCOMH);
+  __User_OLED_Send(OLED_cmd_SetVCOMH); /* VCOMH 电压 */
   __User_OLED_Send(OLED_cmd_VCOMH_Normal);
-  __User_OLED_Send(OLED_cmd_SetRamAddrMode);
+
+  /* 3d. 地址模式与电荷泵使能 */
+  __User_OLED_Send(OLED_cmd_SetRamAddrMode); /* 行地址模式 */
   __User_OLED_Send(OLED_cmd_RamAddrMode_Row);
-  __User_OLED_Send(OLED_cmd_ScrSyncGram);
+  __User_OLED_Send(OLED_cmd_ScrSyncGram); /* 从 GRAM 同步显示 */
   __User_OLED_Send(OLED_cmd_SetChgPump);
-  __User_OLED_Send(OLED_cmd_ChgPump_7V5);
+  __User_OLED_Send(OLED_cmd_ChgPump_7V5); /* 使能电荷泵 7.5V */
   __User_OLED_Delay(10u);
 
+  /*--- 步骤4: 清空缓冲区 ---*/
   isOLED_Initialized = 1u;
   USER_OLED_CleanScreen();
+
+  /*--- 步骤5: 开启显示并启动 DMA 连续刷新 ---*/
   __User_OLED_SetTxMode_Cmd();
   __User_OLED_Send(OLED_cmd_DisplayON);
   __User_OLED_Delay(10u);
   __User_OLED_SetTxMode_Data();
-  __User_OLED_SPI_Transmit_DMA(&GRAM[0][0], 1024u);
+  __User_OLED_SPI_Transmit_DMA(&GRAM[0][0], 1024u); /* 首次 DMA 传输 128×64/8 = 1024 字节 */
   isOLED_AtWork = 1u;
   return OLED_OK;
 }
+
+/*===========================================================================
+ * OLED 反初始化
+ *===========================================================================*/
 
 OLED_Status_t USER_OLED_DeInit(void)
 {
@@ -322,6 +423,10 @@ OLED_Status_t USER_OLED_DeInit(void)
   isOLED_Initialized = 0u;
   return OLED_OK;
 }
+
+/*===========================================================================
+ * 屏幕缓冲区操作：清屏 / 清行
+ *===========================================================================*/
 
 void USER_OLED_CleanScreen(void)
 {
@@ -336,6 +441,14 @@ void USER_OLED_CleanRow(uint8_t row)
     memset(&GRAM[row][0], 0x00, OLED_WIDTH);
   }
 }
+
+/*===========================================================================
+ * 文本输出：字符串 / 单字符
+ *
+ * 使用 6×8 ASCII 字库（FontLib）。
+ * row: 页号 (0~7), column: 字符列 (0~20)，每字符宽 6 像素。
+ * 越界字符回退为空格 (index=32)。
+ *===========================================================================*/
 
 void USER_OLED_putString(uint8_t row, uint8_t column, const char *str, uint8_t length)
 {
@@ -372,6 +485,13 @@ void USER_OLED_putChar(uint8_t row, uint8_t column, char ch)
   }
   memcpy(&GRAM[row][column * OLED_CHAR_WIDTH], FontLib[index], OLED_CHAR_WIDTH);
 }
+
+/*===========================================================================
+ * 数值格式化输出（内部辅助）
+ *
+ * USER_OLED_U16ToStr: 无符号整数→右对齐字符串，支持 2/10/16 进制。
+ * 用作 putX16 / putUI16 / putI16 / putFloat 的底层格式化引擎。
+ *===========================================================================*/
 
 static bool USER_OLED_U16ToStr(uint16_t num, uint8_t radix, uint8_t *str, uint8_t len, char fill)
 {
@@ -534,6 +654,12 @@ void USER_OLED_putFloat(uint8_t row, uint8_t column, float number, uint8_t int_l
   USER_OLED_putString(row, column, temp, (uint8_t)(int_length + float_length + 1u));
 }
 
+/*===========================================================================
+ * 像素点操作（公开 API）
+ *
+ * 所有公开点操作均带边界检查，内部调用 Fast 版本完成实际写入。
+ *===========================================================================*/
+
 void USER_OLED_SetPoint(uint8_t x, uint8_t y)
 {
   if ((x < OLED_WIDTH) && (y < OLED_HEIGHT))
@@ -549,6 +675,13 @@ void USER_OLED_ResetPoint(uint8_t x, uint8_t y)
     USER_OLED_ResetPointFast(x, y);
   }
 }
+
+/*===========================================================================
+ * 线段绘制：水平线 / 垂直线 / 斜线 / 虚线
+ *
+ * 均带边界检查，自动交换坐标顺序。
+ * 斜线使用 Bresenham 算法。
+ *===========================================================================*/
 
 void USER_OLED_DrawHLine(uint8_t x1, uint8_t x2, uint8_t y)
 {
@@ -672,6 +805,13 @@ void USER_OLED_DrawDashedLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, ui
     count++;
   }
 }
+
+/*===========================================================================
+ * 几何图形：矩形 / 圆 / 圆弧
+ *
+ * 矩形支持填充与非填充模式。圆使用中点画圆算法。
+ * 圆弧通过 atan2 角度判断在指定角度区间内的像素。
+ *===========================================================================*/
 
 void USER_OLED_DrawRect(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, bool fill)
 {
@@ -807,6 +947,13 @@ void USER_OLED_DrawArc(uint8_t x0, uint8_t y0, uint8_t radius, uint16_t start_an
   }
 }
 
+/*===========================================================================
+ * 辅助显示：进度条（Bar）/ 波形（Wave）
+ *
+ * Bar: 在指定行显示 0~100% 进度条，增量更新避免重绘。
+ * Wave: 滚动波形显示，每次 UpdateWave 将波形左移一格。
+ *===========================================================================*/
+
 void USER_OLED_DrawBar(uint8_t row, uint8_t percent)
 {
   if (row >= OLED_PAGE_COUNT)
@@ -854,6 +1001,12 @@ void USER_OLED_ClearWave(void)
   memset(GRAM, 0, sizeof(GRAM));
 }
 
+/*===========================================================================
+ * 显示控制：对比度 / 开关显示 / 反色
+ *
+ * 所有控制函数直接发送 SSD1306 命令，操作前检查初始化状态。
+ *===========================================================================*/
+
 void USER_OLED_SetContrast(uint8_t contrast)
 {
   if (!isOLED_Initialized)
@@ -887,6 +1040,14 @@ void USER_OLED_InvertDisplay(bool invert)
   __User_OLED_Send(invert ? OLED_cmd_ReverseDisplay : OLED_cmd_NormalDisplay);
   __User_OLED_SetTxMode_Data();
 }
+
+/*===========================================================================
+ * SPI0 DMA 传输完成中断服务例程
+ *
+ * 每次 DMA 传输完 1024 字节 GRAM 后触发。
+ * 若 OLED 仍在工作状态（isOLED_AtWork），立即启动下一轮 DMA 传输，
+ * 实现 GRAM → OLED 的连续自动刷新。
+ *===========================================================================*/
 
 void SPI0_IRQHandler(void)
 {

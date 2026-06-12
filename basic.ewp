@@ -384,6 +384,7 @@
                 <option>
                     <name>CCIncludePath2</name>
                     <state>$PROJ_DIR$</state>
+                    <state>$PROJ_DIR$\User_OS</state>
                     <state>$PROJ_DIR$\User_Peripheral</state>
                     <state>$PROJ_DIR$\User_Devices</state>
                     <state>$PROJ_DIR$\User_Algorithm</state>
@@ -1524,6 +1525,7 @@
                 <option>
                     <name>CCIncludePath2</name>
                     <state>$PROJ_DIR$</state>
+                    <state>$PROJ_DIR$\User_OS</state>
                     <state>$PROJ_DIR$\User_Peripheral</state>
                     <state>$PROJ_DIR$\User_Devices</state>
                     <state>$PROJ_DIR$\User_Algorithm</state>
@@ -2618,6 +2620,12 @@
         </file>
     </group>
     <group>
+        <name>User_OS</name>
+        <file>
+            <name>$PROJ_DIR$\User_OS\user_os.c</name>
+        </file>
+    </group>
+    <group>
         <name>User_Application</name>
         <file>
             <name>$PROJ_DIR$\User_Application\user_ui.c</name>
@@ -2696,6 +2704,9 @@
         </file>
         <file>
             <name>$PROJ_DIR$\User_Devices\userlib_oled.c</name>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Devices\userlib_fonts.c</name>
         </file>
         <file>
             <name>$PROJ_DIR$\User_Devices\userlib_servo.c</name>

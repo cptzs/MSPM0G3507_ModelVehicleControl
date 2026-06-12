@@ -17,6 +17,7 @@ SYSCFG_OPT_FILES = $(filter %.opt,$(SYSCFG_FILES))
 USER_C_FILES = \
     globals.c \
     main.c \
+    User_OS/user_os.c \
     User_Algorithm/userlib_pid.c \
     User_Application/user_ui.c \
     User_Application/userapp_mcm.c \
@@ -47,6 +48,7 @@ CFLAGS += -I. \
     -IUser_Devices \
     -IUser_Algorithm \
     -IUser_Application \
+    -IUser_OS \
     $(addprefix -f,$(SYSCFG_OPT_FILES)) \
     -D__MSPM0G3507__ \
     -Om \

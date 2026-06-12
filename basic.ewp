@@ -389,6 +389,7 @@
                     <state>$PROJ_DIR$\User_Devices</state>
                     <state>$PROJ_DIR$\User_Algorithm</state>
                     <state>$PROJ_DIR$\User_Application</state>
+                    <state>$PROJ_DIR$\User_Application\UI</state>
                     <state>$MSPM0_SDK_INSTALL_DIR$/source/third_party/CMSIS/Core/Include</state>
                     <state>$MSPM0_SDK_INSTALL_DIR$/source</state>
                 </option>
@@ -659,6 +660,7 @@
                     <state>$PROJ_DIR$\User_Devices</state>
                     <state>$PROJ_DIR$\User_Algorithm</state>
                     <state>$PROJ_DIR$\User_Application</state>
+                    <state>$PROJ_DIR$\User_Application\UI</state>
                 </option>
                 <option>
                     <name>AExtraOptionsCheckV2</name>
@@ -1530,6 +1532,7 @@
                     <state>$PROJ_DIR$\User_Devices</state>
                     <state>$PROJ_DIR$\User_Algorithm</state>
                     <state>$PROJ_DIR$\User_Application</state>
+                    <state>$PROJ_DIR$\User_Application\UI</state>
                     <state>$MSPM0_SDK_INSTALL_DIR$/source/third_party/CMSIS/Core/Include</state>
                     <state>$MSPM0_SDK_INSTALL_DIR$/source</state>
                 </option>
@@ -1800,6 +1803,7 @@
                     <state>$PROJ_DIR$\User_Devices</state>
                     <state>$PROJ_DIR$\User_Algorithm</state>
                     <state>$PROJ_DIR$\User_Application</state>
+                    <state>$PROJ_DIR$\User_Application\UI</state>
                 </option>
                 <option>
                     <name>AExtraOptionsCheckV2</name>
@@ -2628,7 +2632,7 @@
     <group>
         <name>User_Application</name>
         <file>
-            <name>$PROJ_DIR$\User_Application\user_ui.c</name>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_legacy_pages.c</name>
             <excluded>
                 <configuration>Minimal_Bringup</configuration>
             </excluded>
@@ -2653,6 +2657,87 @@
         </file>
         <file>
             <name>$PROJ_DIR$\User_Application\userapp_state_estimator.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+    </group>
+    <group>
+        <name>User_Application_UI</name>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_core.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_core_state.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_dispatch.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_input.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_pages.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_route_context.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_page_motor.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_page_sensors.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_page_actuator.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_page_debug.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_page_route.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_page_unittest.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_Application\UI\user_ui_page_imu_sum.c</name>
             <excluded>
                 <configuration>Minimal_Bringup</configuration>
             </excluded>

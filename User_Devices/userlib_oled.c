@@ -33,9 +33,7 @@
  * 字库加载策略
  * ============================================================================
  * FontLib 字库定义在独立的 userlib_fonts.c 中，通过 userlib_fonts.h 外部引用。
- * 若工程未将 userlib_fonts.c 加入编译，可选择不定义 USER_OLED_FONT_EXTERNAL，
- * 使本文件通过 #include "userlib_fonts.c" 内联引入字库。
- * 推荐方式：定义 USER_OLED_FONT_EXTERNAL 并将 userlib_fonts.c 加入工程。
+ * IAR 工程需要显式加入 User_Devices/userlib_fonts.c，避免 OLED 驱动文件继续内联字库。
  *
  * ============================================================================
  * 使用约束
@@ -52,13 +50,9 @@
 #include "userlib_oled.h"
 #include "userlib_fonts.h"
 
-/* 字库内联回退：若未定义 USER_OLED_FONT_EXTERNAL 则直接包含 .c 文件 */
-#ifndef USER_OLED_FONT_EXTERNAL
-#include "userlib_fonts.c"
-#endif
-
 #include <limits.h>
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 
 /*===========================================================================
@@ -135,6 +129,15 @@ static uint8_t isOLED_AtWork = 0u;
 /*===========================================================================
  * 内部辅助函数：硬件抽象层
  *===========================================================================*/
+
+/**
+ * @brief OLED 驱动内部毫秒级阻塞延时
+ *
+ * @param ms 延时时间，单位 ms。
+ *
+ * @note 本函数基于 delay_cycles() 实现，主要用于 OLED 复位和初始化命令间隔。
+ */
+static void __User_OLED_Delay(uint16_t ms)
 {
   delay_cycles((uint32_t)CLK_PER_MS * ms);
 }
@@ -200,6 +203,15 @@ static void __User_OLED_Send(uint8_t data)
  * Y 坐标 b2..b0 决定在页内的 bit 位置（0x80 >> (y & 0x07)）。
  * 行号 row = 7 - page，使得 Y=0 对应屏幕顶部。
  *===========================================================================*/
+
+/**
+ * @brief 根据 Y 坐标生成 OLED 页内像素掩码
+ *
+ * @param y 像素 Y 坐标，调用者需要保证坐标已经完成边界检查。
+ *
+ * @return 当前像素在页内对应的 bit mask。
+ */
+static inline uint8_t USER_OLED_MakePointMask(uint8_t y)
 {
   return (uint8_t)(0x80u >> (y & 0x07u));
 }
@@ -238,6 +250,17 @@ static inline void USER_OLED_SetPointClipped(int16_t x, int16_t y)
  * 这些 Fast 函数不做边界检查，由上层公开 API 保证参数合法性。
  * 直接操作 GRAM，使用预计算的 page / mask 避免逐点计算开销。
  *===========================================================================*/
+
+/**
+ * @brief 快速绘制水平线
+ *
+ * @param x1 起点 X 坐标，要求已完成边界检查。
+ * @param x2 终点 X 坐标，要求已完成边界检查且 x1 <= x2。
+ * @param y  水平线所在 Y 坐标，要求已完成边界检查。
+ *
+ * @note 本函数直接操作 GRAM，不再逐点调用公开 API，适合被矩形和圆形填充路径复用。
+ */
+static inline void USER_OLED_DrawHLineFast(uint8_t x1, uint8_t x2, uint8_t y)
 {
   const uint8_t row = (uint8_t)(7u - (y >> 3));
   const uint8_t mask = USER_OLED_MakePointMask(y);

@@ -25,15 +25,16 @@
 #include "userlib_oled.h"
 #include "userlib_servo.h"
 #include "userlib_uart.h"
+#include "userapp_mcm.h"
 #include "userapp_race.h"
 
-#define DISPLAY_PAGE_COUNT 11
+#define DISPLAY_PAGE_COUNT 12
 
 /**
  * @brief OLED 显示页面枚举。
  *
- * 当前仍保持 legacy 页序，避免一次性修改 user_ui.c 的页面导航逻辑。
- * 后续新增 UnitTest 页面时，应显式增加 PAGE_UNITTEST，而不是复用 PAGE_CAMERA。
+ * 当前前 11 页仍保持 legacy 页序，避免一次性修改 user_ui.c 的页面导航逻辑。
+ * PAGE_UNITTEST 是新 UI 分层后的独立页面入口，后续由页面表或 legacy 分发器接入。
  */
 typedef enum
 {
@@ -47,8 +48,35 @@ typedef enum
     PAGE_SERVO,
     PAGE_DEBUG,
     PAGE_IMU_SUM,
-    PAGE_TEMPLATE
+    PAGE_TEMPLATE,
+    PAGE_UNITTEST
 } DisplayPage_t;
+
+/**
+ * @brief UI 页面按键事件类型。
+ *
+ * 新页面优先使用该事件类型，由 UI core 统一消费底层按键事件后分发给当前页面。
+ * legacy 页面仍可临时直接调用 USER_LBB_Button_ReadState()/Consume* 接口。
+ */
+typedef enum
+{
+    USER_UI_KEY_EVENT_NONE = 0,
+    USER_UI_KEY_EVENT_SHORT,
+    USER_UI_KEY_EVENT_LONG,
+    USER_UI_KEY_EVENT_LONG_REPEAT
+} USER_UI_KeyEvent_t;
+
+typedef void (*USER_UI_PageDrawFunc_t)(void);
+typedef void (*USER_UI_PageKeyFunc_t)(Button_t key, USER_UI_KeyEvent_t event);
+
+typedef struct
+{
+    DisplayPage_t page;
+    const char *title;
+    USER_UI_PageDrawFunc_t show_static;
+    USER_UI_PageDrawFunc_t show_dynamic;
+    USER_UI_PageKeyFunc_t on_key;
+} USER_UI_PageDef_t;
 
 /* ---- legacy 页面分发接口 ---- */
 void USER_UI_ShowStaticContent(DisplayPage_t page);
@@ -77,5 +105,10 @@ void USER_UI_ShowIMUSumStatic(void);
 void USER_UI_ShowIMUSumDynamic(void);
 void USER_UI_ShowTemplateStatic(void);
 void USER_UI_ShowTemplateDynamic(void);
+
+/* ---- 新分层页面 ---- */
+void USER_UI_ShowUnitTestStatic(void);
+void USER_UI_ShowUnitTestDynamic(void);
+void USER_UI_UnitTestOnKey(Button_t key, USER_UI_KeyEvent_t event);
 
 #endif /* USER_UI_INTERNAL_H */

@@ -11,12 +11,13 @@
 - `user_ui_internal.h`
   - UI 内部接口。
   - 暂时保存页面枚举、legacy 页面函数声明和旧页面实现依赖。
-  - 已新增页面描述符 `USER_UI_PageDef_t`、页面表访问接口、注册表分发 helper、输入事件适配、页面状态 helper、路线启动 context 接口和新 Actuator/Debug/Route/UnitTest 页面接口。
+  - 已新增页面描述符 `USER_UI_PageDef_t`、页面表访问接口、注册表分发 helper、输入事件适配、页面状态 helper、路线启动 context 接口和新 Motor/Actuator/Debug/Route/UnitTest 页面接口。
   - 后续每迁移一个页面，就应把对应依赖下沉到该页面自己的 `.c` 文件中。
 
 - `user_ui_pages.c`
   - 新 UI 页面注册表。
-  - 当前注册了 legacy 页面、新 Actuator 页面、新 Debug 页面、新 Route 页面和 `PAGE_UNITTEST`。
+  - 当前注册了 legacy 页面、新 Motor 页面、新 Actuator 页面、新 Debug 页面、新 Route 页面和 `PAGE_UNITTEST`。
+  - `PAGE_MOTOR` 已切到 `user_ui_page_motor.c` 的新实现。
   - `PAGE_SERVO` 已切到 `user_ui_page_actuator.c` 的新实现。
   - `PAGE_DEBUG` 已切到 `user_ui_page_debug.c` 的新实现。
   - `PAGE_TEMPLATE` 已切到 `user_ui_page_route.c` 的新实现；其他 legacy 页面仍临时调用 legacy 页面绘制函数。
@@ -45,11 +46,16 @@
   - 过渡期 legacy 页面包装文件。
   - 通过包含 `../user_ui.c` 复用旧页面绘制函数，同时把旧 `USER_UI_Task()` 重命名为 `USER_UI_LegacyTask()`，避免和新 `user_ui_core.c` 的 `USER_UI_Task()` 重复定义。
   - 工程切换后，应使用本文件替代直接编译 `../user_ui.c`。
-  - 后续当 motor/sensors/actuator 等页面逐步迁移到独立文件后，本包装文件可以删除。
+  - 后续当 sensors 等页面逐步迁移到独立文件后，本包装文件可以删除。
 
 - `user_ui_route_context.c`
   - 路线启动交互 context。
   - 承接 `Template Path` 页的长按蓄力、稳定倒计时、待启动路线和倒计时结束启动路线逻辑。
+
+- `user_ui_page_motor.c`
+  - 新 Motor Control 页面实现。
+  - 已从 legacy `user_ui.c` 抽出电机模式、目标速度、实际速度、误差、积分、微分和 PWM 显示。
+  - 页面注册表中的 `PAGE_MOTOR` 已切到该文件的新函数。
 
 - `user_ui_page_actuator.c`
   - 新 Actuator 页面实现。
@@ -88,13 +94,13 @@ python tools/migrate_iar_ui_core.py
 
 1. 在 IAR C include path 中加入 `$PROJ_DIR$\User_Application\UI`。
 2. 将 `User_Application\user_ui.c` 编译项替换为 `User_Application\UI\user_ui_legacy_pages.c`。
-3. 新增 `User_Application_UI` 分组，加入 `user_ui_core.c`、`user_ui_core_state.c`、`user_ui_dispatch.c`、`user_ui_input.c`、`user_ui_pages.c`、`user_ui_route_context.c` 以及当前已稳定的新页面文件。
+3. 新增 `User_Application_UI` 分组，加入 `user_ui_core.c`、`user_ui_core_state.c`、`user_ui_dispatch.c`、`user_ui_input.c`、`user_ui_pages.c`、`user_ui_route_context.c` 以及当前已稳定的新页面文件，包括 `user_ui_page_motor.c`。
 
 脚本保持 `Minimal_Bringup` 配置排除应用层 UI 文件，和现有工程配置语义一致。执行后建议用 IAR 打开 `basic.eww`，确认 Debug 配置下只存在一个 `USER_UI_Task()`。
 
 ## 当前迁移边界
 
-新 `user_ui_core.c`、`user_ui_page_actuator.c`、`user_ui_page_debug.c`、`user_ui_page_route.c`、`user_ui_pages.c` 等文件已经准备好。旧页面绘制函数仍通过 `user_ui_legacy_pages.c` 过渡复用。
+新 `user_ui_core.c`、`user_ui_page_motor.c`、`user_ui_page_actuator.c`、`user_ui_page_debug.c`、`user_ui_page_route.c`、`user_ui_pages.c` 等文件已经准备好。旧页面绘制函数仍通过 `user_ui_legacy_pages.c` 过渡复用。
 
 工程切换时的目标状态是：
 

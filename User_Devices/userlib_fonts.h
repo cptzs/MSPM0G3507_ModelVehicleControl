@@ -1,0 +1,12 @@
+#ifndef USERLIB_FONTS_H
+#define USERLIB_FONTS_H
+
+#include <stdint.h>
+
+#define USER_FONT_ASCII_6X8_WIDTH   6u
+#define USER_FONT_ASCII_6X8_HEIGHT  8u
+#define USER_FONT_ASCII_6X8_COUNT   128u
+
+extern const uint8_t FontLib[USER_FONT_ASCII_6X8_COUNT][USER_FONT_ASCII_6X8_WIDTH];
+
+#endif /* USERLIB_FONTS_H */

@@ -47,6 +47,48 @@ static bool USER_OS_IsEarlierRelease(uint32_t candidate, uint32_t selected)
 }
 
 /**
+ * @brief 获取基于 1ms SysTick 的近似微秒时间戳。
+ *
+ * SysTick 已由 SysConfig 配置为 1ms 周期。os_tick 提供毫秒高位，
+ * SysTick->VAL 提供当前 1ms 内的向下计数值，用两者组合得到 us 级时间。
+ * 该时间戳只用于短时间差统计，允许 uint32_t 自然回绕。
+ */
+static uint32_t USER_OS_GetTimeUs(void)
+{
+    uint32_t tick_before;
+    uint32_t tick_after;
+    uint32_t systick_val;
+    uint32_t load_cycles;
+    uint32_t elapsed_cycles;
+    uint32_t cycles_per_us;
+
+    do
+    {
+        tick_before = os_tick;
+        systick_val = SysTick->VAL;
+        tick_after = os_tick;
+    } while (tick_before != tick_after);
+
+    load_cycles = SysTick->LOAD + 1u;
+    if (load_cycles > systick_val)
+    {
+        elapsed_cycles = load_cycles - systick_val;
+    }
+    else
+    {
+        elapsed_cycles = 0u;
+    }
+
+    cycles_per_us = (uint32_t)(CPUCLK_FREQ / 1000000u);
+    if (cycles_per_us == 0u)
+    {
+        cycles_per_us = 1u;
+    }
+
+    return (tick_before * 1000u) + (elapsed_cycles / cycles_per_us);
+}
+
+/**
  * @brief 选择当前已经到期且优先级最高的任务。
  */
 static int16_t USER_OS_SelectReadyTask(uint32_t now)
@@ -190,7 +232,9 @@ void USER_OS_Run(void)
     uint32_t now;
     uint32_t start_tick;
     uint32_t finish_tick;
-    uint32_t elapsed_ms;
+    uint32_t start_us;
+    uint32_t finish_us;
+    uint32_t elapsed_us;
     USER_OS_TaskControlBlock_t *tcb;
 
     now = USER_OS_GetTick();
@@ -204,19 +248,23 @@ void USER_OS_Run(void)
     USER_OS_UpdateNextRelease(tcb, now);
 
     start_tick = USER_OS_GetTick();
+    start_us = USER_OS_GetTimeUs();
     tcb->last_start_tick = start_tick;
-    tcb->task();
-    finish_tick = USER_OS_GetTick();
 
-    elapsed_ms = finish_tick - start_tick;
+    tcb->task();
+
+    finish_us = USER_OS_GetTimeUs();
+    finish_tick = USER_OS_GetTick();
+    elapsed_us = finish_us - start_us;
+
     tcb->last_finish_tick = finish_tick;
-    tcb->last_cost_us = elapsed_ms * 1000u;
+    tcb->last_cost_us = elapsed_us;
     if (tcb->last_cost_us > tcb->max_cost_us)
     {
         tcb->max_cost_us = tcb->last_cost_us;
     }
 
-    if (elapsed_ms >= tcb->period_ms)
+    if (elapsed_us >= ((uint32_t)tcb->period_ms * 1000u))
     {
         tcb->overrun_count++;
     }

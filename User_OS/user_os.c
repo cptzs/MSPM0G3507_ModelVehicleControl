@@ -39,6 +39,14 @@ static bool USER_OS_TickReached(uint32_t now, uint32_t target)
 }
 
 /**
+ * @brief 判断 candidate 是否比 selected 更早释放，支持 uint32_t 回绕。
+ */
+static bool USER_OS_IsEarlierRelease(uint32_t candidate, uint32_t selected)
+{
+    return ((int32_t)(selected - candidate) > 0);
+}
+
+/**
  * @brief 选择当前已经到期且优先级最高的任务。
  */
 static int16_t USER_OS_SelectReadyTask(uint32_t now)
@@ -69,8 +77,8 @@ static int16_t USER_OS_SelectReadyTask(uint32_t now)
             selected = (int16_t)i;
         }
         else if ((os_tasks[i].priority == os_tasks[selected].priority) &&
-                 USER_OS_TickReached(os_tasks[selected].next_release_tick,
-                                     os_tasks[i].next_release_tick))
+                 USER_OS_IsEarlierRelease(os_tasks[i].next_release_tick,
+                                           os_tasks[selected].next_release_tick))
         {
             selected = (int16_t)i;
         }

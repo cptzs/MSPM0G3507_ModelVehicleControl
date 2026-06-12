@@ -11,13 +11,13 @@
 - `user_ui_internal.h`
   - UI 内部接口。
   - 暂时保存页面枚举、legacy 页面函数声明和旧页面实现依赖。
-  - 已新增页面描述符 `USER_UI_PageDef_t`、页面表访问接口、注册表分发 helper、输入事件适配、页面状态 helper 和路线启动 context 接口。
+  - 已新增页面描述符 `USER_UI_PageDef_t`、页面表访问接口、注册表分发 helper、输入事件适配、页面状态 helper、路线启动 context 接口和新 Route/UnitTest 页面接口。
   - 后续每迁移一个页面，就应把对应依赖下沉到该页面自己的 `.c` 文件中。
 
 - `user_ui_pages.c`
   - 新 UI 页面注册表。
-  - 当前注册了前 11 个 legacy 页面，并注册 `PAGE_UNITTEST`。
-  - 该文件暂未接入 legacy `user_ui.c` 的页面切换逻辑，避免一次性重写主 UI 文件。
+  - 当前注册了 legacy 页面、新 Route 页面和 `PAGE_UNITTEST`。
+  - `PAGE_TEMPLATE` 已切到 `user_ui_page_route.c` 的新实现；其他 legacy 页面仍临时调用 `../user_ui.c` 中的绘制函数。
 
 - `user_ui_dispatch.c`
   - 页面注册表通用分发层。
@@ -27,17 +27,24 @@
 - `user_ui_input.c`
   - UI 输入适配层。
   - 将 `userlib_lbb` 的计数型按钮事件转换为 UI 内部的 `USER_UI_KeyEvent_t`。
-  - 后续 `user_ui_core.c` 应通过该文件统一消费按钮事件，再分发给当前页面。
+  - `user_ui_core.c` 通过该文件统一消费按钮事件，再分发给当前页面。
 
 - `user_ui_core_state.c`
   - UI 核心状态 helper。
   - 维护当前页面和静态内容脏标志，提供页面切换、静态重绘和动态刷新 helper。
-  - 这是后续抽出 `user_ui_core.c` 的中间层。
+
+- `user_ui_core.c`
+  - 新的注册表驱动 UI 周期任务。
+  - 当前文件已经完成，但**暂时不要加入 IAR 工程**；在 legacy `../user_ui.c` 中的 `USER_UI_Task()` 被删除、改名或条件编译屏蔽之前，加入工程会造成重复定义。
 
 - `user_ui_route_context.c`
   - 路线启动交互 context。
   - 承接 `Template Path` 页的长按蓄力、稳定倒计时、待启动路线和倒计时结束启动路线逻辑。
-  - 当前尚未替换 legacy `user_ui.c` 中的同名状态，下一步应把旧主循环切到该 context。
+
+- `user_ui_page_route.c`
+  - 新 Route 页面实现。
+  - 负责 Template Path 的路线图、进度条、动作摘要、倒计时显示和 ESC 取消。
+  - 显示逻辑读取 `user_ui_route_context.c`，不再依赖 legacy `user_ui.c` 的文件内 `static` 状态。
 
 - `user_ui_page_unittest.c`
   - UnitTest 页面的 UI 骨架。
@@ -51,7 +58,7 @@
 
 ## 当前迁移边界
 
-`Template Path` 页的长按蓄力、稳定倒计时、蜂鸣提示状态仍保存在 legacy `user_ui.c` 的文件内 `static` 变量中，`USER_UI_ShowTemplateDynamic()` 也直接读取这些变量。因此在迁移 `USER_UI_Task()` 之前，必须先把旧主循环中的路线启动交互状态切换到 `user_ui_route_context.c`，否则直接新增独立 `user_ui_core.c` 会破坏模板路线启动逻辑。
+新 `user_ui_core.c`、`user_ui_page_route.c`、`user_ui_pages.c` 等文件已经准备好，但 legacy `../user_ui.c` 仍然包含旧 `USER_UI_Task()` 和大部分 legacy 页面绘制函数。后续统一修改 IAR 工程文件时，需要先处理入口冲突：要么把 legacy `USER_UI_Task()` 从 `../user_ui.c` 中移除/改名，要么让 `../user_ui.c` 只保留 legacy 页面绘制函数。
 
 ## 后续目标结构
 
@@ -83,4 +90,4 @@ User_Application/UI/
 4. UnitTest 页面应作为独立页面新增，不再复用 `PAGE_CAMERA`。
 5. 修改 IAR 工程文件前，先确保新增 `.c` 文件职责稳定。
 6. legacy `user_ui.c` 中的页面标题数组和两个页面分发 `switch` 后续应替换为 `user_ui_dispatch.c` helper。
-7. legacy `user_ui.c` 中的路线启动状态后续应替换为 `user_ui_route_context.c`。
+7. legacy `user_ui.c` 后续应降级为 legacy 页面绘制文件，不再保留 UI 主循环入口。

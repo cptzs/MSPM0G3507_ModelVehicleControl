@@ -2,11 +2,11 @@
 
 static const USER_UI_PageDef_t ui_page_table[] = {
     {PAGE_MOTOR, "Motor Control", USER_UI_ShowMotorPageStatic, USER_UI_ShowMotorPageDynamic, NULL},
-    {PAGE_ENCODER, "Encoder Data ", USER_UI_ShowEncoderStatic, USER_UI_ShowEncoderDynamic, NULL},
-    {PAGE_PHOTOELECTRIC, "Photo Sensors", USER_UI_ShowPhotoelectricStatic, USER_UI_ShowPhotoelectricDynamic, NULL},
-    {PAGE_ADC, "ADC Data     ", USER_UI_ShowAdcStatic, USER_UI_ShowAdcDynamic, NULL},
-    {PAGE_LIDAR, "LiDAR Sensors", USER_UI_ShowLidarStatic, USER_UI_ShowLidarDynamic, NULL},
-    {PAGE_GYROSCOPE, "IMU Data     ", USER_UI_ShowGyroscopeStatic, USER_UI_ShowGyroscopeDynamic, NULL},
+    {PAGE_ENCODER, "Encoder Data ", USER_UI_ShowEncoderPageStatic, USER_UI_ShowEncoderPageDynamic, USER_UI_EncoderOnKey},
+    {PAGE_PHOTOELECTRIC, "Photo Sensors", USER_UI_ShowPhotoelectricPageStatic, USER_UI_ShowPhotoelectricPageDynamic, USER_UI_PhotoelectricOnKey},
+    {PAGE_ADC, "ADC Data     ", USER_UI_ShowAdcPageStatic, USER_UI_ShowAdcPageDynamic, NULL},
+    {PAGE_LIDAR, "LiDAR Sensors", USER_UI_ShowLidarPageStatic, USER_UI_ShowLidarPageDynamic, USER_UI_LidarOnKey},
+    {PAGE_GYROSCOPE, "IMU Data     ", USER_UI_ShowGyroscopePageStatic, USER_UI_ShowGyroscopePageDynamic, USER_UI_GyroscopeOnKey},
     {PAGE_CAMERA, "Smart Camera ", USER_UI_ShowCameraStatic, USER_UI_ShowCameraDynamic, NULL},
     {PAGE_SERVO, "Servo Control", USER_UI_ShowActuatorPageStatic, USER_UI_ShowActuatorPageDynamic, NULL},
     {PAGE_DEBUG, "Threads      ", USER_UI_ShowDebugPageStatic, USER_UI_ShowDebugPageDynamic, NULL},

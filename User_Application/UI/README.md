@@ -11,13 +11,18 @@
 - `user_ui_internal.h`
   - UI 内部接口。
   - 暂时保存页面枚举、legacy 页面函数声明和旧页面实现依赖。
-  - 已新增页面描述符 `USER_UI_PageDef_t` 和页面表访问接口，为后续替换 legacy 大 `switch` 做准备。
+  - 已新增页面描述符 `USER_UI_PageDef_t`、页面表访问接口和注册表分发 helper。
   - 后续每迁移一个页面，就应把对应依赖下沉到该页面自己的 `.c` 文件中。
 
 - `user_ui_pages.c`
   - 新 UI 页面注册表。
-  - 当前注册了前 11 个 legacy 页面，并预留 `PAGE_UNITTEST`。
+  - 当前注册了前 11 个 legacy 页面，并注册 `PAGE_UNITTEST`。
   - 该文件暂未接入 legacy `user_ui.c` 的页面切换逻辑，避免一次性重写主 UI 文件。
+
+- `user_ui_dispatch.c`
+  - 页面注册表通用分发层。
+  - 提供按页面号绘制静态内容、绘制动态内容、分发页面按键、获取上一页/下一页等 helper。
+  - 后续 legacy `user_ui.c` 中的页面标题数组、两个页面分发 `switch`、`PREV/NEXT` 边界判断应优先替换为这里的 helper。
 
 - `user_ui_page_unittest.c`
   - UnitTest 页面的 UI 骨架。
@@ -29,6 +34,10 @@
   - 旧代码仍可 `#include "user_ui.h"`。
   - 新代码只需要调用 UI 周期任务时，应优先包含 `UI/user_ui_public.h`。
 
+## 当前迁移边界
+
+`Template Path` 页的长按蓄力、稳定倒计时、蜂鸣提示状态仍保存在 legacy `user_ui.c` 的文件内 `static` 变量中，`USER_UI_ShowTemplateDynamic()` 也直接读取这些变量。因此在迁移 `USER_UI_Task()` 之前，必须先把路线启动交互状态抽成独立 context 或迁移到 `user_ui_page_route.c`，否则直接新增独立 `user_ui_core.c` 会破坏模板路线启动逻辑。
+
 ## 后续目标结构
 
 建议后续逐步拆成以下文件：
@@ -39,6 +48,7 @@ User_Application/UI/
 ├─ user_ui_internal.h
 ├─ user_ui_core.c
 ├─ user_ui_pages.c
+├─ user_ui_dispatch.c
 ├─ user_ui_page_motor.c
 ├─ user_ui_page_sensors.c
 ├─ user_ui_page_actuator.c
@@ -54,4 +64,4 @@ User_Application/UI/
 3. 页面内按键不要直接抢读所有按键，后续应由 `user_ui_core.c` 统一消费并分发。
 4. UnitTest 页面应作为独立页面新增，不再复用 `PAGE_CAMERA`。
 5. 修改 IAR 工程文件前，先确保新增 `.c` 文件职责稳定。
-6. legacy `user_ui.c` 中的页面标题数组和两个页面分发 `switch` 后续应替换为 `user_ui_pages.c` 页面表。
+6. legacy `user_ui.c` 中的页面标题数组和两个页面分发 `switch` 后续应替换为 `user_ui_dispatch.c` helper。

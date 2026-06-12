@@ -83,6 +83,11 @@ uint8_t USER_UI_GetPageCount(void);
 const USER_UI_PageDef_t *USER_UI_FindPage(DisplayPage_t page);
 const USER_UI_PageDef_t *USER_UI_GetPageByIndex(uint8_t index);
 
+bool USER_UI_DrawPageStaticFromRegistry(DisplayPage_t page);
+bool USER_UI_DrawPageDynamicFromRegistry(DisplayPage_t page);
+bool USER_UI_DispatchPageKeyFromRegistry(DisplayPage_t page, Button_t key, USER_UI_KeyEvent_t event);
+DisplayPage_t USER_UI_GetAdjacentPageFromRegistry(DisplayPage_t current_page, bool forward);
+
 /* ---- legacy 页面分发接口 ---- */
 void USER_UI_ShowStaticContent(DisplayPage_t page);
 void USER_UI_ShowDynamicContent(DisplayPage_t page);

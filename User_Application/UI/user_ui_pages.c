@@ -11,7 +11,7 @@ static const USER_UI_PageDef_t ui_page_table[] = {
     {PAGE_SERVO, "Servo Control", USER_UI_ShowServoStatic, USER_UI_ShowServoDynamic, NULL},
     {PAGE_DEBUG, "Threads      ", USER_UI_ShowDebugStatic, USER_UI_ShowDebugDynamic, NULL},
     {PAGE_IMU_SUM, "IMU Sum Data ", USER_UI_ShowIMUSumStatic, USER_UI_ShowIMUSumDynamic, NULL},
-    {PAGE_TEMPLATE, "Template Path", USER_UI_ShowTemplateStatic, USER_UI_ShowTemplateDynamic, NULL},
+    {PAGE_TEMPLATE, "Template Path", USER_UI_ShowRouteStatic, USER_UI_ShowRouteDynamic, USER_UI_RouteOnKey},
     {PAGE_UNITTEST, "UnitTest     ", USER_UI_ShowUnitTestStatic, USER_UI_ShowUnitTestDynamic, USER_UI_UnitTestOnKey},
 };
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Patch IAR project entries for the registry-driven UI core migration.
+r"""Patch IAR project entries for the registry-driven UI core migration.
 
 This helper intentionally performs a small, deterministic text patch on
 ``basic.ewp`` instead of asking developers to edit the XML by hand.

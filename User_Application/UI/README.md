@@ -17,7 +17,7 @@
 - `user_ui_pages.c`
   - 新 UI 页面注册表。
   - 当前注册了 legacy 页面、新 Route 页面和 `PAGE_UNITTEST`。
-  - `PAGE_TEMPLATE` 已切到 `user_ui_page_route.c` 的新实现；其他 legacy 页面仍临时调用 `../user_ui.c` 中的绘制函数。
+  - `PAGE_TEMPLATE` 已切到 `user_ui_page_route.c` 的新实现；其他 legacy 页面仍临时调用 legacy 页面绘制函数。
 
 - `user_ui_dispatch.c`
   - 页面注册表通用分发层。
@@ -35,7 +35,14 @@
 
 - `user_ui_core.c`
   - 新的注册表驱动 UI 周期任务。
-  - 当前文件已经完成，但**暂时不要加入 IAR 工程**；在 legacy `../user_ui.c` 中的 `USER_UI_Task()` 被删除、改名或条件编译屏蔽之前，加入工程会造成重复定义。
+  - 当前文件已经完成，但在最终修改 IAR 工程前，旧 `../user_ui.c` 仍由当前工程编译。
+  - 最终工程切换时，应让本文件成为唯一提供 `USER_UI_Task()` 的编译单元。
+
+- `user_ui_legacy_pages.c`
+  - 过渡期 legacy 页面包装文件。
+  - 通过包含 `../user_ui.c` 复用旧页面绘制函数，同时把旧 `USER_UI_Task()` 重命名为 `USER_UI_LegacyTask()`，避免和新 `user_ui_core.c` 的 `USER_UI_Task()` 重复定义。
+  - 最终修改 `basic.ewp` 时，应使用本文件替代直接编译 `../user_ui.c`。
+  - 后续当 motor/sensors/debug 等页面逐步迁移到独立文件后，本包装文件可以删除。
 
 - `user_ui_route_context.c`
   - 路线启动交互 context。
@@ -58,7 +65,16 @@
 
 ## 当前迁移边界
 
-新 `user_ui_core.c`、`user_ui_page_route.c`、`user_ui_pages.c` 等文件已经准备好，但 legacy `../user_ui.c` 仍然包含旧 `USER_UI_Task()` 和大部分 legacy 页面绘制函数。后续统一修改 IAR 工程文件时，需要先处理入口冲突：要么把 legacy `USER_UI_Task()` 从 `../user_ui.c` 中移除/改名，要么让 `../user_ui.c` 只保留 legacy 页面绘制函数。
+新 `user_ui_core.c`、`user_ui_page_route.c`、`user_ui_pages.c` 等文件已经准备好。为了保持当前工程文件暂时不变，`../user_ui.c` 仍保留原始旧入口；新增的 `user_ui_legacy_pages.c` 是最终工程切换时使用的过渡包装文件。
+
+最终统一修改 `basic.ewp` 时，应：
+
+1. 移除或停用直接编译 `User_Application/user_ui.c`。
+2. 加入 `User_Application/UI/user_ui_core.c`。
+3. 加入 `User_Application/UI/user_ui_legacy_pages.c`。
+4. 加入当前所有已稳定的 `User_Application/UI/*.c` 新模块。
+
+这样新 core 提供唯一 `USER_UI_Task()`，legacy wrapper 提供尚未迁移的旧页面绘制函数。
 
 ## 后续目标结构
 
@@ -74,6 +90,7 @@ User_Application/UI/
 ├─ user_ui_pages.c
 ├─ user_ui_dispatch.c
 ├─ user_ui_route_context.c
+├─ user_ui_legacy_pages.c        # 过渡期文件，最终删除
 ├─ user_ui_page_motor.c
 ├─ user_ui_page_sensors.c
 ├─ user_ui_page_actuator.c

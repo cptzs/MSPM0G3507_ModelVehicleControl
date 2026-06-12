@@ -1,9 +1,5 @@
 #include "user_ui_internal.h"
 
-static void USER_UI_Page_Noop(void)
-{
-}
-
 static const USER_UI_PageDef_t ui_page_table[] = {
     {PAGE_MOTOR, "Motor Control", USER_UI_ShowMotorStatic, USER_UI_ShowMotorDynamic, NULL},
     {PAGE_ENCODER, "Encoder Data ", USER_UI_ShowEncoderStatic, USER_UI_ShowEncoderDynamic, NULL},
@@ -16,7 +12,7 @@ static const USER_UI_PageDef_t ui_page_table[] = {
     {PAGE_DEBUG, "Threads      ", USER_UI_ShowDebugStatic, USER_UI_ShowDebugDynamic, NULL},
     {PAGE_IMU_SUM, "IMU Sum Data ", USER_UI_ShowIMUSumStatic, USER_UI_ShowIMUSumDynamic, NULL},
     {PAGE_TEMPLATE, "Template Path", USER_UI_ShowTemplateStatic, USER_UI_ShowTemplateDynamic, NULL},
-    {PAGE_UNITTEST, "UnitTest     ", USER_UI_Page_Noop, USER_UI_Page_Noop, NULL},
+    {PAGE_UNITTEST, "UnitTest     ", USER_UI_ShowUnitTestStatic, USER_UI_ShowUnitTestDynamic, USER_UI_UnitTestOnKey},
 };
 
 const USER_UI_PageDef_t *USER_UI_GetPageTable(void)

@@ -42,7 +42,8 @@ const uint32_t BUTTON_PINS[BUTTON_COUNT] = {
 
 static bool USER_LBB_Button_IsValid(Button_t button)
 {
-    return ((uint8_t)button < BUTTON_COUNT);
+    int button_index = (int)button;
+    return ((button_index >= 0) && (button_index < BUTTON_COUNT));
 }
 
 static uint16_t USER_LBB_Button_PendingShortRaw(uint8_t button)

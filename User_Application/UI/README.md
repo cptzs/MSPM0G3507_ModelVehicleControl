@@ -11,12 +11,13 @@
 - `user_ui_internal.h`
   - UI 内部接口。
   - 暂时保存页面枚举、legacy 页面函数声明和旧页面实现依赖。
-  - 已新增页面描述符 `USER_UI_PageDef_t`、页面表访问接口、注册表分发 helper、输入事件适配、页面状态 helper、路线启动 context 接口和新 Route/UnitTest 页面接口。
+  - 已新增页面描述符 `USER_UI_PageDef_t`、页面表访问接口、注册表分发 helper、输入事件适配、页面状态 helper、路线启动 context 接口和新 Debug/Route/UnitTest 页面接口。
   - 后续每迁移一个页面，就应把对应依赖下沉到该页面自己的 `.c` 文件中。
 
 - `user_ui_pages.c`
   - 新 UI 页面注册表。
-  - 当前注册了 legacy 页面、新 Route 页面和 `PAGE_UNITTEST`。
+  - 当前注册了 legacy 页面、新 Debug 页面、新 Route 页面和 `PAGE_UNITTEST`。
+  - `PAGE_DEBUG` 已切到 `user_ui_page_debug.c` 的新实现。
   - `PAGE_TEMPLATE` 已切到 `user_ui_page_route.c` 的新实现；其他 legacy 页面仍临时调用 legacy 页面绘制函数。
 
 - `user_ui_dispatch.c`
@@ -42,11 +43,16 @@
   - 过渡期 legacy 页面包装文件。
   - 通过包含 `../user_ui.c` 复用旧页面绘制函数，同时把旧 `USER_UI_Task()` 重命名为 `USER_UI_LegacyTask()`，避免和新 `user_ui_core.c` 的 `USER_UI_Task()` 重复定义。
   - 最终修改 `basic.ewp` 时，应使用本文件替代直接编译 `../user_ui.c`。
-  - 后续当 motor/sensors/debug 等页面逐步迁移到独立文件后，本包装文件可以删除。
+  - 后续当 motor/sensors/actuator 等页面逐步迁移到独立文件后，本包装文件可以删除。
 
 - `user_ui_route_context.c`
   - 路线启动交互 context。
   - 承接 `Template Path` 页的长按蓄力、稳定倒计时、待启动路线和倒计时结束启动路线逻辑。
+
+- `user_ui_page_debug.c`
+  - 新 Threads/Debug 页面实现。
+  - 负责显示协作式调度器任务最近/最大运行耗时。
+  - 当前仍复用 `USER_OS_GetTaskCount()` / `USER_OS_GetTaskStats()` 的显示窗口语义；当任务数量超过 OLED 可见行数时，OS stats 层负责根据 UP/DOWN 事件做窗口滚动。
 
 - `user_ui_page_route.c`
   - 新 Route 页面实现。
@@ -65,7 +71,7 @@
 
 ## 当前迁移边界
 
-新 `user_ui_core.c`、`user_ui_page_route.c`、`user_ui_pages.c` 等文件已经准备好。为了保持当前工程文件暂时不变，`../user_ui.c` 仍保留原始旧入口；新增的 `user_ui_legacy_pages.c` 是最终工程切换时使用的过渡包装文件。
+新 `user_ui_core.c`、`user_ui_page_debug.c`、`user_ui_page_route.c`、`user_ui_pages.c` 等文件已经准备好。为了保持当前工程文件暂时不变，`../user_ui.c` 仍保留原始旧入口；新增的 `user_ui_legacy_pages.c` 是最终工程切换时使用的过渡包装文件。
 
 最终统一修改 `basic.ewp` 时，应：
 

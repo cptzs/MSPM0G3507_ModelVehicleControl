@@ -1,7 +1,7 @@
 #include "user_ui_internal.h"
 
 static const USER_UI_PageDef_t ui_page_table[] = {
-    {PAGE_MOTOR, "Motor Control", USER_UI_ShowMotorStatic, USER_UI_ShowMotorDynamic, NULL},
+    {PAGE_MOTOR, "Motor Control", USER_UI_ShowMotorPageStatic, USER_UI_ShowMotorPageDynamic, NULL},
     {PAGE_ENCODER, "Encoder Data ", USER_UI_ShowEncoderStatic, USER_UI_ShowEncoderDynamic, NULL},
     {PAGE_PHOTOELECTRIC, "Photo Sensors", USER_UI_ShowPhotoelectricStatic, USER_UI_ShowPhotoelectricDynamic, NULL},
     {PAGE_ADC, "ADC Data     ", USER_UI_ShowAdcStatic, USER_UI_ShowAdcDynamic, NULL},

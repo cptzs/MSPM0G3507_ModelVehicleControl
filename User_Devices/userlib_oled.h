@@ -40,7 +40,7 @@
 #include <math.h>    //数学库函数
 
 // 用户外设接口头文件
-#include "userlib_sys.h" // 系统时间和SysTick相关函数
+#include "userlib_systick.h" // SysTick驱动接口
 // 用户设备头文件
 
 typedef enum OLED_Reverse
@@ -155,6 +155,18 @@ void USER_OLED_ResetPoint(uint8_t x, uint8_t y);
 /// @param row 行号(0-7)
 /// @param percent 百分比(0-100)
 void USER_OLED_DrawBar(uint8_t row, uint8_t percent);
+
+/// @brief 绘制水平线
+/// @param x1 起点X坐标 (0-127)
+/// @param x2 终点X坐标 (0-127)
+/// @param y Y坐标 (0-63)
+void USER_OLED_DrawHLine(uint8_t x1, uint8_t x2, uint8_t y);
+
+/// @brief 绘制垂直线
+/// @param x X坐标 (0-127)
+/// @param y1 起点Y坐标 (0-63)
+/// @param y2 终点Y坐标 (0-63)
+void USER_OLED_DrawVLine(uint8_t x, uint8_t y1, uint8_t y2);
 
 /// @brief 绘制直线
 /// @param x1 起点X坐标 (0-127)

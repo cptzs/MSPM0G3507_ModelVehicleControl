@@ -1,11 +1,20 @@
+/**
+ * @file userlib_pwm.c
+ * @brief MSPM0 GPTIMER PWM 输出驱动。
+ *
+ * 提供 PWM 占空比、频率设置和启停控制，直接操作定时器寄存器。
+ */
+
 #include "userlib_pwm.h"
 
-#define PWM_CLOCK_FREQUENCY CPUCLK_FREQ // 定义PWM时钟频率为CPU时钟频率
+#define PWM_CLOCK_FREQUENCY CPUCLK_FREQ /* PWM时钟频率 = CPU时钟频率 */
 
-/// @brief 设置PWM通道的占空比
-/// @param timer 定时器实例
-/// @param channel 通道号
-/// @param dutyCycle 占空比（分辨率0-1000）
+/**
+ * @brief 设置指定 PWM 通道的占空比。
+ * @param timer 定时器实例基地址。
+ * @param channel 比较通道索引 (DL_TIMER_CC_INDEX)。
+ * @param dutyCycle 占空比（分辨率 0–1000，对应 0%–100%）。
+ */
 void USER_PWM_SetDutyCycle(GPTIMER_Regs *timer, DL_TIMER_CC_INDEX channel, uint16_t dutyCycle)
 {
     volatile uint32_t *pReg;
@@ -32,16 +41,20 @@ void USER_PWM_SetFrequency(GPTIMER_Regs *timer, uint32_t frequency, uint16_t rel
     timer->COUNTERREGS.LOAD = reloadValue - 1;
 }
 
-/// @brief 初始化PWM模块
-/// @param timer 定时器实例
+/**
+ * @brief 启动 PWM 计数器输出。
+ * @param timer 定时器实例基地址。
+ */
 void USER_PWM_Start(GPTIMER_Regs *timer)
 {
     // 启动计数器
     timer->COUNTERREGS.CTRCTL |= GPTIMER_CTRCTL_EN_ENABLED;
 }
 
-/// @brief 停止定时器所有PWM输出
-/// @param timer 定时器实例
+/**
+ * @brief 停止定时器所有 PWM 输出。
+ * @param timer 定时器实例基地址。
+ */
 void USER_PWM_Stop(GPTIMER_Regs *timer)
 {
     // 停止定时器的PWM输出

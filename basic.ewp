@@ -384,10 +384,12 @@
                 <option>
                     <name>CCIncludePath2</name>
                     <state>$PROJ_DIR$</state>
+                    <state>$PROJ_DIR$\User_OS</state>
                     <state>$PROJ_DIR$\User_Peripheral</state>
                     <state>$PROJ_DIR$\User_Devices</state>
                     <state>$PROJ_DIR$\User_Algorithm</state>
                     <state>$PROJ_DIR$\User_Application</state>
+                    <state>$PROJ_DIR$\User_UI</state>
                     <state>$MSPM0_SDK_INSTALL_DIR$/source/third_party/CMSIS/Core/Include</state>
                     <state>$MSPM0_SDK_INSTALL_DIR$/source</state>
                 </option>
@@ -658,6 +660,7 @@
                     <state>$PROJ_DIR$\User_Devices</state>
                     <state>$PROJ_DIR$\User_Algorithm</state>
                     <state>$PROJ_DIR$\User_Application</state>
+                    <state>$PROJ_DIR$\User_UI</state>
                 </option>
                 <option>
                     <name>AExtraOptionsCheckV2</name>
@@ -1239,7 +1242,7 @@
                 </option>
                 <option>
                     <name>OGLastSavedByProductVersion</name>
-                    <state>9.70.1.13552</state>
+                    <state>9.70.4.21192</state>
                 </option>
                 <option>
                     <name>OGChipSelectEditMenu</name>
@@ -1524,10 +1527,12 @@
                 <option>
                     <name>CCIncludePath2</name>
                     <state>$PROJ_DIR$</state>
+                    <state>$PROJ_DIR$\User_OS</state>
                     <state>$PROJ_DIR$\User_Peripheral</state>
                     <state>$PROJ_DIR$\User_Devices</state>
                     <state>$PROJ_DIR$\User_Algorithm</state>
                     <state>$PROJ_DIR$\User_Application</state>
+                    <state>$PROJ_DIR$\User_UI</state>
                     <state>$MSPM0_SDK_INSTALL_DIR$/source/third_party/CMSIS/Core/Include</state>
                     <state>$MSPM0_SDK_INSTALL_DIR$/source</state>
                 </option>
@@ -1798,6 +1803,7 @@
                     <state>$PROJ_DIR$\User_Devices</state>
                     <state>$PROJ_DIR$\User_Algorithm</state>
                     <state>$PROJ_DIR$\User_Application</state>
+                    <state>$PROJ_DIR$\User_UI</state>
                 </option>
                 <option>
                     <name>AExtraOptionsCheckV2</name>
@@ -2282,18 +2288,6 @@
         </settings>
     </configuration>
     <group>
-        <name>Examples</name>
-        <group>
-            <name>minimal_bringup</name>
-            <file>
-                <name>$PROJ_DIR$\examples\minimal_bringup\main_minimal.c</name>
-                <excluded>
-                    <configuration>Debug</configuration>
-                </excluded>
-            </file>
-        </group>
-    </group>
-    <group>
         <name>SysConfig Generated Files</name>
         <file>
             <name>$PROJ_DIR$\ti_msp_dl_config.c</name>
@@ -2620,12 +2614,6 @@
     <group>
         <name>User_Application</name>
         <file>
-            <name>$PROJ_DIR$\User_Application\user_ui.c</name>
-            <excluded>
-                <configuration>Minimal_Bringup</configuration>
-            </excluded>
-        </file>
-        <file>
             <name>$PROJ_DIR$\User_Application\userapp_mcm.c</name>
             <excluded>
                 <configuration>Minimal_Bringup</configuration>
@@ -2656,6 +2644,9 @@
             <name>$PROJ_DIR$\User_Devices\userlib_encoder.c</name>
         </file>
         <file>
+            <name>$PROJ_DIR$\User_Devices\userlib_fonts.c</name>
+        </file>
+        <file>
             <name>$PROJ_DIR$\User_Devices\userlib_imu.c</name>
             <excluded>
                 <configuration>Minimal_Bringup</configuration>
@@ -2683,13 +2674,7 @@
             </excluded>
         </file>
         <file>
-            <name>$PROJ_DIR$\User_Devices\userlib_oemt_an.c</name>
-            <excluded>
-                <configuration>Minimal_Bringup</configuration>
-            </excluded>
-        </file>
-        <file>
-            <name>$PROJ_DIR$\User_Devices\userlib_oemt_dg.c</name>
+            <name>$PROJ_DIR$\User_Devices\userlib_oemt.c</name>
             <excluded>
                 <configuration>Minimal_Bringup</configuration>
             </excluded>
@@ -2702,6 +2687,12 @@
             <excluded>
                 <configuration>Minimal_Bringup</configuration>
             </excluded>
+        </file>
+    </group>
+    <group>
+        <name>User_OS</name>
+        <file>
+            <name>$PROJ_DIR$\User_OS\user_os.c</name>
         </file>
     </group>
     <group>
@@ -2719,23 +2710,110 @@
             <name>$PROJ_DIR$\User_Peripheral\userlib_pwm.c</name>
         </file>
         <file>
-            <name>$PROJ_DIR$\User_Peripheral\userlib_sys.c</name>
+            <name>$PROJ_DIR$\User_Peripheral\userlib_systick.c</name>
         </file>
         <file>
             <name>$PROJ_DIR$\User_Peripheral\userlib_uart.c</name>
         </file>
     </group>
+    <group>
+        <name>User_UI</name>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_core.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_core_state.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_dispatch.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_input.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_page_actuator.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_page_camera.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_page_threads.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_page_imu_sum.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_page_motor.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_page_route.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_page_sensors.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_page_unittest.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_pages.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_route_context.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_unittest_actions.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+    </group>
     <file>
         <name>$PROJ_DIR$\globals.c</name>
-        <excluded>
-            <configuration>Minimal_Bringup</configuration>
-        </excluded>
     </file>
     <file>
         <name>$PROJ_DIR$\main.c</name>
-        <excluded>
-            <configuration>Minimal_Bringup</configuration>
-        </excluded>
     </file>
     <file>
         <name>$PROJ_DIR$\main.syscfg</name>

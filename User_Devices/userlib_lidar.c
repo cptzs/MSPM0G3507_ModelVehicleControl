@@ -1,3 +1,13 @@
+/**
+ * @file userlib_lidar.c
+ * @brief 4 路激光雷达 (LiDAR) 驱动 (CAN 通信协议)。
+ *
+ * CAN 2.0b, 500Kbps，主机轮询发送请求帧, 4 个从机 (0x201–0x204) 响应。
+ * 每 8ms 轮询一个从机，轮流切换。距离有效量程 ≤6.5m。
+ *
+ * 协议格式见下方注释。
+ */
+
 #include "userlib_lidar.h"
 
 /*

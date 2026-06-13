@@ -1,7 +1,14 @@
+/**
+ * @file userlib_uart.c
+ * @brief MSPM0 UART + DMA 串口通信驱动。
+ *
+ * 支持 4 路 UART 的 DMA 收发、中断回调注册、超时检测和接收字节数查询。
+ */
+
 #include "userlib_uart.h"
 
-// 下面这些通道号需要根据SysConfig具体的DMA配置进行调整，默认仅为占位符
-// 适配UART0 DMA通道号
+/* DMA 通道号需根据 SysConfig 实际 DMA 配置调整，以下为默认占位值 */
+/* UART0 DMA */
 #ifndef DMA_CH_UART0_TX_CHAN_ID
 #define DMA_CH_UART0_TX_CHAN_ID 0 // UART0 TX DMA通道号
 #endif
@@ -71,26 +78,32 @@ uint8_t *uart_rx_dst[4] = {0};         // 每个UART实例的待接收数据指�
 uint32_t uart_txdma_ch[4] = {0}; // 每个UART实例的TX_DMA通道号
 uint32_t uart_rxdma_ch[4] = {0}; // 每个UART实例的RX_DMA通道号
 
-/// @brief 设置UART中断处理函数
-/// @param uart_inst UART实例
-/// @param interrupt_type 中断类型
-/// @param handler 中断处理函数指针
+/**
+ * @brief 注册 UART 中断回调函数。
+ * @param uart_inst UART 实例编号。
+ * @param interrupt_type 中断类型 (TX_DONE / RX_DONE 等)。
+ * @param handler 中断回调函数指针。
+ */
 void USER_UART_RegisterCallback(UART_Instance uart_inst, UART_Interrupt interrupt_type, void (*handler)(void))
 {
     uart_interrupt_handler[uart_inst][interrupt_type] = handler;
 }
 
-/// @brief UART取消中断处理函数
-/// @param uart_inst UART实例
-/// @param interrupt_type 中断类型
+/**
+ * @brief 注销 UART 中断回调函数。
+ * @param uart_inst UART 实例编号。
+ * @param interrupt_type 中断类型。
+ */
 void USER_UART_UnregisterCallback(UART_Instance uart_inst, UART_Interrupt interrupt_type)
 {
     uart_interrupt_handler[uart_inst][interrupt_type] = 0;
 }
 
-/// @brief 初始化串口实例
-/// @param uart_inst UART实例
-/// @note 该函数会启用UART总中断，并标记当前UART实例
+/**
+ * @brief 初始化指定 UART 实例。
+ * @details 记录 DMA 通道号、启用 UART 全局中断、标记实例为已启用。
+ * @param uart_inst UART 实例编号。
+ */
 void USER_UART_Init(UART_Instance uart_inst)
 {
     // 记录DMA通道号

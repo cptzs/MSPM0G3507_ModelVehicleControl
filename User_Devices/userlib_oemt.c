@@ -1,7 +1,4 @@
-#include "userlib_oemt_an.h"
-#include "user_config.h"
-
-#if OEMT_SENSOR_MODE == OEMT_SENSOR_MODE_AN
+#include "userlib_oemt.h"
 
 enum
 {
@@ -81,7 +78,6 @@ static bool USER_OEMT_AN_SetChannel(uint8_t idx)
     return true;
 }
 
-#if OEMT_SENSOR_MODE == OEMT_SENSOR_MODE_AN
 /// @brief 读取当前模拟复用通道。
 /// @return true 表示读取成功。
 static bool USER_OEMT_AN_ReadCurrentChannel(void)
@@ -126,7 +122,6 @@ static bool USER_OEMT_AN_ChangeChannel(void)
 
     return USER_OEMT_AN_SetChannel(oemt_an_scan_channel);
 }
-#endif
 
 /// @brief 统计模拟复用模式实际扫描频率的 SysTick 回调。
 static void USER_SysTickCallback_OEMT_AN(void)
@@ -354,7 +349,6 @@ bool USER_OEMT_AN_Init(uint16_t *result_data, uint16_t *analog_raw_data)
     return true;
 }
 
-#if OEMT_SENSOR_MODE == OEMT_SENSOR_MODE_AN
 /// @brief 模拟式 OEMT 扫描定时器中断。
 void TIMER_OEMT_INST_IRQHandler(void)
 {
@@ -373,66 +367,3 @@ void TIMER_OEMT_INST_IRQHandler(void)
     USER_OEMT_AN_ChangeChannel();
     oemt_an_scan_count++;
 }
-#endif
-
-#else
-
-bool USER_OEMT_AN_Init(uint16_t *result_data, uint16_t *analog_raw_data)
-{
-    (void)result_data;
-    (void)analog_raw_data;
-    return false;
-}
-
-void USER_OEMT_AN_Enable(void)
-{
-}
-
-void USER_OEMT_AN_Disable(void)
-{
-}
-
-uint16_t USER_OEMT_AN_GetRawData(uint8_t idx)
-{
-    (void)idx;
-    return 0;
-}
-
-uint32_t USER_OEMT_AN_GetScanRate(void)
-{
-    return 0;
-}
-
-void USER_OEMT_AN_SetHysteresisHigh(uint8_t idx, uint16_t threshold)
-{
-    (void)idx;
-    (void)threshold;
-}
-
-void USER_OEMT_AN_SetHysteresisLow(uint8_t idx, uint16_t threshold)
-{
-    (void)idx;
-    (void)threshold;
-}
-
-uint16_t USER_OEMT_AN_GetHysteresisHigh(uint8_t idx)
-{
-    (void)idx;
-    return 0;
-}
-
-uint16_t USER_OEMT_AN_GetHysteresisLow(uint8_t idx)
-{
-    (void)idx;
-    return 0;
-}
-
-void USER_OEMT_AN_AutoSetHysteresisHigh(void)
-{
-}
-
-void USER_OEMT_AN_AutoSetHysteresisLow(void)
-{
-}
-
-#endif

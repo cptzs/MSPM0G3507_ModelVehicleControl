@@ -1,4 +1,11 @@
-﻿#ifndef GLOBALS_H
+﻿/**
+ * @file globals.h
+ * @brief 全局变量外部声明与 ADC 通道枚举。
+ *
+ * 所有模块通过包含本头访问传感器数据、PID 控制器和 Modbus 寄存器。
+ */
+
+#ifndef GLOBALS_H
 #define GLOBALS_H
 
 #include "userlib_encoder.h"

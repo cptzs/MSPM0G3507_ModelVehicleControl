@@ -1,8 +1,8 @@
-#ifndef USERLIB_OEMT_AN_H
-#define USERLIB_OEMT_AN_H
+#ifndef USERLIB_OEMT_H
+#define USERLIB_OEMT_H
 
 #include "ti_msp_dl_config.h"
-#include "userlib_sys.h"
+#include "userlib_systick.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -66,4 +66,4 @@ void USER_OEMT_AN_AutoSetHysteresisHigh(void);
 /// @note 会采集 32 次当前原始数据，期间产生约 320 ms 阻塞。
 void USER_OEMT_AN_AutoSetHysteresisLow(void);
 
-#endif /* USERLIB_OEMT_AN_H */
+#endif /* USERLIB_OEMT_H */

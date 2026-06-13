@@ -10,7 +10,7 @@
 #include <string.h>  /* 字符串操作库函数 */
 
 // 用户外设接口头文件
-#include "userlib_sys.h" // 系统时间和SysTick相关函数
+#include "userlib_systick.h" // SysTick驱动接口
 
 //*****************CAN中断源定义******************/
 

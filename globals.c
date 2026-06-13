@@ -1,3 +1,11 @@
+/**
+ * @file globals.c
+ * @brief 全局变量定义与全局数据处理任务。
+ *
+ * 集中保存所有传感器数据、PID 实例、ADC 结果、Modbus 寄存器的运行时存储。
+ * USER_GlobalData_Task() 每 1ms 执行 ADC→电压/温度换算和编码器清零逻辑。
+ */
+
 #include "globals.h"
 
 /// @brief 编码器数据数组。

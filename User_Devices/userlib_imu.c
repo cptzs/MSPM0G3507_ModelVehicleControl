@@ -1,3 +1,11 @@
+/**
+ * @file userlib_imu.c
+ * @brief 6 轴 IMU 传感器驱动 (UART 通信协议)。
+ *
+ * 通过 UART 与 IMU 模块通信，解析 33 字节数据帧获取加速度/角速度/姿态角。
+ * 支持校准指令序列（解锁→设置参考→锁定）和角度归一化（跨越 ±180° 边界）。
+ */
+
 #include "userlib_imu.h"
 
 #define IMU_Cmd_Amount 6    /* IMU指令集数量 */
@@ -185,9 +193,8 @@ void USER_IMU_Init(bool useSysTick, IMU_Data_StructTypeDef *data_ptr, UART_Insta
 }
 
 /**
- * @brief IMU设置指令
- * @param order 指令序号
- * @note 将IMU指令推送至串口发送队列
+ * @brief 推送 IMU 指令至发送队列。
+ * @param order 指令序号。
  */
 void USER_IMU_CMD_Set(uint8_t order)
 {
@@ -222,8 +229,8 @@ float USER_IMU_NormalizeYaw(float angle)
 }
 
 /**
- * @brief 设置IMU指令（兼容性函数）
- * @param order IMU指令
+ * @brief 设置 IMU 指令（USER_IMU_CMD_Set 的兼容性入口）。
+ * @param order 指令枚举值 (IMU_ODR_READDATA / IMU_ODR_SETANGREF / IMU_ODR_SETYAWREF)。
  */
 void USER_IMU_SetOrder(uint8_t order)
 {
@@ -445,8 +452,9 @@ IMU_Status_EnumTypeDef USER_IMU_RxFrameProcess(uint8_t *rx_data)
 }
 
 /**
- * @brief IMU通信循环处理函数
- * @retval 无
+ * @brief IMU 通信状态机 (每 1ms 由 SysTick 回调调用)。
+ * @details 管理 UART 收发时序：发送请求帧 → 等待 DMA 接收完成 → 帧预检查 → 数据解析。
+ *          接收超时自动复位，连续错误超过阈值后标记超时状态。
  */
 void USER_IMU_Comm_Routine(void)
 {

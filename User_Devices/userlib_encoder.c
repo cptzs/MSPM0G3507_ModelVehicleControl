@@ -1,18 +1,15 @@
-#include "userlib_encoder.h"
-
-/*
- *原理介绍：
- * 该程序使用定时器的边沿检测计数模式来捕获给定时间内输入脉冲的数量。
- * 定时器配置为：
- * 1.边沿检测计数模式
- * 2.检测通道CC0
- * 2.上升沿触发
- * 3.向下计数模式
- * 4.默认计数最大值为65535
- * 5.启用计数器归零中断
- * 在SysTick中断函数中，每隔指定的毫秒读取一次计数器的值，即为脉冲的数量，
- * 在计数器溢出（向下计数到0）时置位溢出标志，并将计数器重置为最大值。
+/**
+ * @file userlib_encoder.c
+ * @brief 编码器驱动（定时器边沿计数模式）。
+ *
+ * 使用 GPTIMER 边沿检测计数捕获输入脉冲，SysTick 回调定时读取计数差值
+ * 并计算转速。支持 3 路编码器独立配置周期和方向检测。
+ *
+ * 原理：定时器向下计数，每次溢出(归零)触发中断并重置计数器。
+ * SysTick 回调中每隔 period 毫秒读取一次计数值作为脉冲增量。
  */
+
+#include "userlib_encoder.h"
 
 /// @brief 编码器配置结构体（内部使用）
 typedef struct
@@ -35,8 +32,10 @@ bool encoder_first_call = true;
 /// @brief 编码器系统滴答计数器
 uint32_t systick_encoder[ENCODER_COUNT];
 
-/// @brief 编码器系统滴答中断处理函数
-/// @param  None
+/**
+ * @brief 编码器 SysTick 周期处理函数。
+ * @details 由 SysTick 回调调用，定时读取编码器计数值并计算转速和累计里程。
+ */
 void USER_SysTick_Handler_Encoder(void)
 {
     uint8_t i = 0;
@@ -189,10 +188,13 @@ bool USER_ENCODER_InitSlot(EncoderData_t_Typedef *data_ptr,
     }
 }
 
-/// @brief 编码器全部初始化函数
-/// @details 使用外部传入的encoder_data数组初始化所有编码器
-/// @param encoder_data_array 指向编码器数据数组的指针
-/// @return 初始化结果
+/**
+ * @brief 编码器全部初始化函数。
+ * @details 批量初始化 3 路编码器，每路配置对应定时器和方向 IO。
+ * @param encoder_data_array 编码器数据数组指针 (3 元素)。
+ * @retval true 全部初始化成功。
+ * @retval false 部分或全部初始化失败。
+ */
 bool USER_ENCODER_Init(EncoderData_t_Typedef *encoder_data_array)
 {
     uint8_t i;

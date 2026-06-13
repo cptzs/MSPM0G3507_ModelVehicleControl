@@ -7,6 +7,7 @@
  */
 
 #include "user_ui_internal.h"
+#include "userlib_oled.h"
 
 /**
  * @brief 在注册表中查找指定页面的数组索引。
@@ -107,6 +108,26 @@ bool USER_UI_DispatchPageKeyFromRegistry(DisplayPage_t page, Button_t key, USER_
 
     page_def->on_key(key, event);
     return true;
+}
+
+void USER_UI_EnterPageFromRegistry(DisplayPage_t page)
+{
+    const USER_UI_PageDef_t *page_def = USER_UI_FindPage(page);
+
+    if ((page_def != NULL) && (page_def->on_enter != NULL))
+    {
+        page_def->on_enter();
+    }
+}
+
+void USER_UI_ExitPageFromRegistry(DisplayPage_t page)
+{
+    const USER_UI_PageDef_t *page_def = USER_UI_FindPage(page);
+
+    if ((page_def != NULL) && (page_def->on_exit != NULL))
+    {
+        page_def->on_exit();
+    }
 }
 
 /**

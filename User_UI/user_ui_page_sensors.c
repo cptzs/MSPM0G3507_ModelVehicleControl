@@ -1,5 +1,10 @@
 #include "user_ui_internal.h"
 
+#include "globals.h"
+#include "userlib_imu.h"
+#include "userlib_oemt.h"
+#include "userlib_oled.h"
+
 /**
  * @file user_ui_page_sensors.c
  * @brief 传感器数据页面集合：Encoder / Photoelectric / ADC / LiDAR / Gyroscope(IMU)。

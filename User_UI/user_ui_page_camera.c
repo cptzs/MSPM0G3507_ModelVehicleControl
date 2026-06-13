@@ -1,4 +1,5 @@
 #include "user_ui_internal.h"
+#include "userlib_oled.h"
 
 /**
  * @file user_ui_page_camera.c

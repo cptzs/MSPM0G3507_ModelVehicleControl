@@ -38,7 +38,7 @@ UI_SOURCE_FILES = [
     r"$PROJ_DIR$\User_Application\UI\user_ui_page_motor.c",
     r"$PROJ_DIR$\User_Application\UI\user_ui_page_sensors.c",
     r"$PROJ_DIR$\User_Application\UI\user_ui_page_actuator.c",
-    r"$PROJ_DIR$\User_Application\UI\user_ui_page_debug.c",
+    r"$PROJ_DIR$\User_Application\UI\user_ui_page_threads.c",
     r"$PROJ_DIR$\User_Application\UI\user_ui_page_route.c",
     r"$PROJ_DIR$\User_Application\UI\user_ui_page_unittest.c",
 ]

@@ -1,5 +1,8 @@
 #include "user_ui_internal.h"
 
+#include "userlib_oled.h"
+#include "userlib_servo.h"
+
 /**
  * @file user_ui_page_actuator.c
  * @brief 执行器页面 — 当前包含 Servo Control（两路舵机角度/PWM 宽度/误差）。

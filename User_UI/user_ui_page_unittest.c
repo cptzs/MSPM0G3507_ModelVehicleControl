@@ -9,6 +9,10 @@
 #include "user_ui_internal.h"
 #include "user_ui_unittest_actions.h"
 
+#include <stdio.h>
+
+#include "userlib_oled.h"
+
 /** @brief OLED 可见行数（第 1~6 行，第 7 行为状态栏） */
 #define UI_UNITTEST_VISIBLE_ROWS 6u
 

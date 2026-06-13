@@ -42,6 +42,8 @@ typedef struct {
 | `USER_OS_RegisterTask(name, func, period_ms, offset_ms, priority)` | 注册任务，返回 task_id |
 | `USER_OS_SetTaskEnabled(task_id, enabled)` | 使能/禁用任务 |
 | `USER_OS_GetTaskStats(task_id, &stats)` | 获取任务运行统计 |
+| `USER_OS_ClearTaskMaxCost(task_id)` | 清除指定任务最大耗时 |
+| `USER_OS_ClearAllTaskMaxCost()` | 清除全部任务最大耗时 |
 | `USER_OS_GetTaskCount()` | 获取已注册任务数 |
 | `USER_OS_GetTick()` | 获取当前系统 tick |
 
@@ -67,8 +69,9 @@ USER_OS_RegisterTask("mcm",       USER_MCM_Task,        10,  4,  2);  // 10ms, p
 USER_OS_RegisterTask("race",      USER_Race_Task,       10,  5,  3);  // 10ms, pri 3
 USER_OS_RegisterTask("lidar",     USER_LIDAR_Task,       5,  1,  4);  // 5ms, pri 4
 USER_OS_RegisterTask("ui",        USER_UI_Task,          5,  2,  6);  // 5ms, pri 6
-USER_OS_RegisterTask("heartbeat", USER_Heartbeat_Task, 500,  0, 10);  // 500ms, pri 10
 ```
+
+LED 心跳由 `USER_UI_Task()` 内部按 500ms 分频处理，不再占用独立调度任务。
 
 **offset 错峰说明**：state/mcm/race 三个 10ms 任务错开 1ms（offset=3/4/5），
 lidar/ui 两个 5ms 任务错开 1ms（offset=1/2），避免同一 tick 集中执行。

@@ -1,5 +1,9 @@
 #include "user_ui_internal.h"
 
+#include "globals.h"
+#include "userlib_motor.h"
+#include "userlib_oled.h"
+
 /**
  * @file user_ui_page_motor.c
  * @brief Motor Control 页面 — 显示左右电机 PID 状态（模式/目标/实际/误差/积分/微分/PWM）。

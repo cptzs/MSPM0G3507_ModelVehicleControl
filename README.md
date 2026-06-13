@@ -86,8 +86,7 @@ ModelVehicleControl_AI/
 | `mcm` | 10ms | 4 | 2 | 非阻塞运动控制 |
 | `race` | 10ms | 5 | 3 | 路线调度推进 |
 | `lidar` | 5ms | 1 | 4 | LiDAR 轮询通信 |
-| `ui` | 5ms | 2 | 6 | OLED UI 刷新 |
-| `heartbeat` | 500ms | 0 | 10 | LED 心跳闪烁 |
+| `ui` | 5ms | 2 | 6 | OLED UI 刷新 + 500ms LED 心跳 |
 
 ## 编译
 

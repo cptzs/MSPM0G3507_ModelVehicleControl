@@ -1,6 +1,10 @@
 #include "user_ui_unittest_actions.h"
 #include "user_ui_internal.h"
 
+#include "userlib_imu.h"
+#include "userlib_lbb.h"
+#include "userlib_motor.h"
+
 /**
  * @file user_ui_unittest_actions.c
  * @brief UnitTest 页面硬件动作层实现。
@@ -51,7 +55,7 @@ void USER_UI_UT_Actions_Init(void)
     for (i = 0u; i < (uint8_t)UT_ITEM_COUNT; i++)
     {
         ut_items[i].executed = false;
-        ut_items[i].status = (ut_items[i].name[0] == 'C') ? "N/A" : "pending";
+        ut_items[i].status = (i == 8u) ? "N/A" : "pending";
     }
 }
 

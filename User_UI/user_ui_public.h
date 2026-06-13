@@ -14,6 +14,7 @@
  *
  * 由协作式调度器周期调用，负责页面导航、按键交互和当前页面刷新。
  */
+void USER_UI_Init(void);
 void USER_UI_Task(void);
 
 #endif /* USER_UI_PUBLIC_H */

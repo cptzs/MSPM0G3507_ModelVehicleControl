@@ -13,19 +13,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 
-#include "globals.h"
-#include "userlib_can.h"
 #include "userlib_lbb.h"
-#include "userlib_lidar.h"
-#include "userlib_motor.h"
-#include "userlib_oemt.h"
-#include "userlib_oled.h"
-#include "userlib_servo.h"
-#include "userlib_uart.h"
-#include "userapp_mcm.h"
-#include "userapp_race.h"
 
 /**
  * @brief OLED 显示页面枚举（注册表驱动，共 12 页）。
@@ -40,7 +29,7 @@ typedef enum
     PAGE_GYROSCOPE,
     PAGE_CAMERA,
     PAGE_SERVO,
-    PAGE_DEBUG,
+    PAGE_THREADS,
     PAGE_IMU_SUM,
     PAGE_TEMPLATE,
     PAGE_UNITTEST
@@ -61,6 +50,7 @@ typedef enum
 
 typedef void (*USER_UI_PageDrawFunc_t)(void);
 typedef void (*USER_UI_PageKeyFunc_t)(Button_t key, USER_UI_KeyEvent_t event);
+typedef void (*USER_UI_PageLifecycleFunc_t)(void);
 
 typedef struct
 {
@@ -69,6 +59,9 @@ typedef struct
     USER_UI_PageDrawFunc_t show_static;
     USER_UI_PageDrawFunc_t show_dynamic;
     USER_UI_PageKeyFunc_t on_key;
+    USER_UI_PageLifecycleFunc_t on_enter;
+    USER_UI_PageLifecycleFunc_t on_exit;
+    uint8_t refresh_divider;
 } USER_UI_PageDef_t;
 
 const USER_UI_PageDef_t *USER_UI_GetPageTable(void);
@@ -79,6 +72,8 @@ const USER_UI_PageDef_t *USER_UI_GetPageByIndex(uint8_t index);
 bool USER_UI_DrawPageStaticFromRegistry(DisplayPage_t page);
 bool USER_UI_DrawPageDynamicFromRegistry(DisplayPage_t page);
 bool USER_UI_DispatchPageKeyFromRegistry(DisplayPage_t page, Button_t key, USER_UI_KeyEvent_t event);
+void USER_UI_EnterPageFromRegistry(DisplayPage_t page);
+void USER_UI_ExitPageFromRegistry(DisplayPage_t page);
 DisplayPage_t USER_UI_GetAdjacentPageFromRegistry(DisplayPage_t current_page, bool forward);
 
 /* ---- UI input/event adapters ---- */
@@ -88,6 +83,7 @@ bool USER_UI_ConsumeAndDispatchButton(DisplayPage_t page, Button_t button);
 
 /* ---- UI core state helpers ---- */
 DisplayPage_t USER_UI_Core_GetCurrentPage(void);
+void USER_UI_Core_Reset(void);
 void USER_UI_Core_SetCurrentPage(DisplayPage_t page);
 void USER_UI_Core_GotoAdjacentPage(bool forward);
 bool USER_UI_Core_IsStaticDirty(void);
@@ -126,8 +122,10 @@ void USER_UI_ShowGyroscopePageDynamic(void);
 void USER_UI_GyroscopeOnKey(Button_t key, USER_UI_KeyEvent_t event);
 void USER_UI_ShowActuatorPageStatic(void);
 void USER_UI_ShowActuatorPageDynamic(void);
-void USER_UI_ShowDebugPageStatic(void);
-void USER_UI_ShowDebugPageDynamic(void);
+void USER_UI_ShowThreadsPageStatic(void);
+void USER_UI_ShowThreadsPageDynamic(void);
+void USER_UI_ThreadsOnKey(Button_t key, USER_UI_KeyEvent_t event);
+void USER_UI_ThreadsOnEnter(void);
 void USER_UI_ShowCameraPageStatic(void);
 void USER_UI_ShowCameraPageDynamic(void);
 void USER_UI_ShowIMUSumPageStatic(void);
@@ -136,6 +134,7 @@ void USER_UI_IMUSumOnKey(Button_t key, USER_UI_KeyEvent_t event);
 void USER_UI_ShowRouteStatic(void);
 void USER_UI_ShowRouteDynamic(void);
 void USER_UI_RouteOnKey(Button_t key, USER_UI_KeyEvent_t event);
+void USER_UI_RouteOnExit(void);
 void USER_UI_ShowUnitTestStatic(void);
 void USER_UI_ShowUnitTestDynamic(void);
 void USER_UI_UnitTestOnKey(Button_t key, USER_UI_KeyEvent_t event);

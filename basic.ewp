@@ -2755,7 +2755,7 @@
             </excluded>
         </file>
         <file>
-            <name>$PROJ_DIR$\User_UI\user_ui_page_debug.c</name>
+            <name>$PROJ_DIR$\User_UI\user_ui_page_threads.c</name>
             <excluded>
                 <configuration>Minimal_Bringup</configuration>
             </excluded>

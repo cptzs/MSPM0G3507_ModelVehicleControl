@@ -57,6 +57,7 @@ static uint32_t USER_OS_GetTimeUs(void)
 {
     uint32_t tick_before;
     uint32_t tick_after;
+    uint32_t systick_pending;
     uint32_t systick_val;
     uint32_t load_cycles;
     uint32_t elapsed_cycles;
@@ -67,7 +68,8 @@ static uint32_t USER_OS_GetTimeUs(void)
         tick_before = os_tick;
         systick_val = SysTick->VAL;
         tick_after = os_tick;
-    } while (tick_before != tick_after);
+        systick_pending = SCB->ICSR & SCB_ICSR_PENDSTSET_Msk;
+    } while ((tick_before != tick_after) || (systick_pending != 0u));
 
     load_cycles = SysTick->LOAD + 1u;
     if (load_cycles > systick_val)
@@ -328,6 +330,30 @@ bool USER_OS_GetTaskStats(uint8_t task_id, USER_OS_TaskStats_t *stats)
     stats->max_cost_us = tcb->max_cost_us;
 
     return true;
+}
+
+bool USER_OS_ClearTaskMaxCost(uint8_t task_id)
+{
+    if ((task_id >= os_task_count) || (!os_tasks[task_id].used))
+    {
+        return false;
+    }
+
+    os_tasks[task_id].max_cost_us = 0u;
+    return true;
+}
+
+void USER_OS_ClearAllTaskMaxCost(void)
+{
+    uint8_t i;
+
+    for (i = 0u; i < os_task_count; i++)
+    {
+        if (os_tasks[i].used)
+        {
+            os_tasks[i].max_cost_us = 0u;
+        }
+    }
 }
 
 uint8_t USER_OS_GetTaskCount(void)

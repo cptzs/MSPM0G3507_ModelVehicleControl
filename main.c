@@ -40,6 +40,7 @@
 /* 协作式 1ms 调度器 */
 #include "user_os.h"
 
+/* 全局变量 */
 #include "globals.h"
 
 /**
@@ -57,18 +58,8 @@ static void USER_Device_Init(void)
   USER_ADC_Init(adc_data, 7);
   USER_SERVO_Init();
   USER_lidar_Init(lidar_data);
-
   USER_OEMT_AN_Init(oemt_data, &adc_data[ADC_CHANNEL_2_P25]);
-
   USER_Modbus_Slave_Init(true, UART_1, modbus_regs, &modbus_status);
-}
-
-/**
- * @brief 500ms 心跳任务。
- */
-static void USER_Heartbeat_Task(void)
-{
-  USER_LBB_LED_On(LED0, 250);
 }
 
 /**
@@ -96,7 +87,6 @@ static void USER_RegisterSchedulerTasks(void)
   (void)USER_OS_RegisterTask("race", USER_Race_Task, 10u, 5u, 3u);
   (void)USER_OS_RegisterTask("lidar", USER_LIDAR_Task, 5u, 1u, 4u);
   (void)USER_OS_RegisterTask("ui", USER_UI_Task, 5u, 2u, 6u);
-  (void)USER_OS_RegisterTask("heartbeat", USER_Heartbeat_Task, 500u, 0u, 10u);
 }
 
 /**
@@ -106,11 +96,13 @@ int main(void)
 {
   SYSCFG_DL_init();
 
-  USER_SYSTEM_Init();            /* 初始化系统时钟和系统滴答 */
-  USER_OS_Init();                /* 初始化 1ms 协作式调度器 */
-  USER_GlobalData_Init();        /* 初始化全局数据结构 */
-  USER_Device_Init();            /* 初始化用户外部设备 */
-  USER_STATE_Init();             /* 初始化统一车辆状态估计。 */
+  USER_SYSTEM_Init();     /* 初始化系统时钟和系统滴答 */
+  USER_OS_Init();         /* 初始化 1ms 协作式调度器 */
+  USER_GlobalData_Init(); /* 初始化全局数据结构 */
+  USER_Device_Init();     /* 初始化用户外部设备 */
+  USER_STATE_Init();      /* 初始化统一车辆状态估计。 */
+  USER_UI_Init();         /* 初始化 UI 页面、交互状态和测试项 */
+
   USER_RegisterSchedulerTasks(); /* 注册协作式调度器任务 */
 
   while (true)

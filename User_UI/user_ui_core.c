@@ -1,4 +1,10 @@
 #include "user_ui_internal.h"
+#include "user_ui_unittest_actions.h"
+
+#define USER_UI_HEARTBEAT_PERIOD_TICKS 100u
+#define USER_UI_HEARTBEAT_ON_TIME_MS 250u
+
+static uint8_t ui_heartbeat_tick = 0u;
 
 /**
  * @file user_ui_core.c
@@ -49,13 +55,9 @@ static void USER_UI_Core_DispatchButtonToCurrentPage(Button_t button)
     DisplayPage_t current_page = USER_UI_Core_GetCurrentPage();
     USER_UI_KeyEvent_t event;
 
-    if (!USER_UI_Core_PageHasKeyHandler(current_page))
-    {
-        return;
-    }
-
     event = USER_UI_ConsumeButtonEvent(button);
-    if (event != USER_UI_KEY_EVENT_NONE)
+    if ((event != USER_UI_KEY_EVENT_NONE) &&
+        USER_UI_Core_PageHasKeyHandler(current_page))
     {
         (void)USER_UI_DispatchPageKeyFromRegistry(current_page, button, event);
     }
@@ -82,28 +84,67 @@ static void USER_UI_Core_DispatchPageButtons(void)
  *
  * @note 每 5ms 调用一次，传入 ENTER 按键按压时间和状态以驱动充电→倒计时流程。
  */
-static void USER_UI_Core_ServiceRoutePage(void)
+static bool USER_UI_Core_ServiceRoutePage(void)
 {
+    bool was_busy;
+
     if (USER_UI_Core_GetCurrentPage() != PAGE_TEMPLATE)
     {
-        return;
+        return false;
     }
 
+    was_busy = USER_UI_Route_IsBusy();
     USER_UI_Route_Service5ms((button_press_time[ENTER] > 0u), button_press_time[ENTER]);
+    return was_busy || USER_UI_Route_IsBusy();
 }
 
 /**
  * @brief 主任务函数，负责处理用户界面逻辑。
  */
+static void USER_UI_Core_DispatchRouteBusyButtons(void)
+{
+    USER_UI_KeyEvent_t esc_event = USER_UI_ConsumeButtonEvent(ESC);
+
+    (void)USER_UI_ConsumeButtonEvent(UP);
+    (void)USER_UI_ConsumeButtonEvent(DOWN);
+    (void)USER_UI_ConsumeButtonEvent(LEFT);
+    (void)USER_UI_ConsumeButtonEvent(RIGHT);
+    (void)USER_UI_ConsumeButtonEvent(PREV);
+    (void)USER_UI_ConsumeButtonEvent(NEXT);
+    (void)USER_UI_ConsumeButtonEvent(ENTER);
+
+    if (esc_event != USER_UI_KEY_EVENT_NONE)
+    {
+        (void)USER_UI_DispatchPageKeyFromRegistry(PAGE_TEMPLATE, ESC, esc_event);
+    }
+}
+
+void USER_UI_Init(void)
+{
+    ui_heartbeat_tick = 0u;
+    USER_UI_Route_Reset();
+    USER_UI_UT_Actions_Init();
+    USER_UI_Core_Reset();
+}
+
 void USER_UI_Task(void)
 {
+    bool route_interaction_active;
     USER_UI_KeyEvent_t prev_event;
     USER_UI_KeyEvent_t next_event;
 
-    USER_UI_Core_ServiceRoutePage();
-
-    if (USER_UI_Route_IsBusy())
+    ui_heartbeat_tick++;
+    if (ui_heartbeat_tick >= USER_UI_HEARTBEAT_PERIOD_TICKS)
     {
+        ui_heartbeat_tick = 0u;
+        USER_LBB_LED_On(LED0, USER_UI_HEARTBEAT_ON_TIME_MS);
+    }
+
+    route_interaction_active = USER_UI_Core_ServiceRoutePage();
+
+    if (route_interaction_active)
+    {
+        USER_UI_Core_DispatchRouteBusyButtons();
         USER_UI_Core_RedrawStaticIfNeeded();
         USER_UI_Core_DrawCurrentDynamic();
         return;

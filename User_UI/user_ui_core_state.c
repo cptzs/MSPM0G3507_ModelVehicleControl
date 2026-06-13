@@ -7,11 +7,13 @@
  */
 
 #include "user_ui_internal.h"
+#include "userlib_oled.h"
 
 /** @brief 当前激活的 OLED 显示页面 */
 static DisplayPage_t ui_current_page = PAGE_MOTOR;
 /** @brief 静态内容脏标志（页面切换或显式标记时置位） */
 static bool ui_static_dirty = true;
+static uint8_t ui_dynamic_tick = 0u;
 
 /**
  * @brief 获取当前激活页面。
@@ -21,6 +23,15 @@ static bool ui_static_dirty = true;
 DisplayPage_t USER_UI_Core_GetCurrentPage(void)
 {
     return ui_current_page;
+}
+
+void USER_UI_Core_Reset(void)
+{
+    ui_current_page = PAGE_MOTOR;
+    ui_static_dirty = true;
+    ui_dynamic_tick = 0u;
+    USER_OLED_CleanScreen();
+    USER_UI_EnterPageFromRegistry(ui_current_page);
 }
 
 /**
@@ -39,9 +50,12 @@ void USER_UI_Core_SetCurrentPage(DisplayPage_t page)
 
     if (ui_current_page != page)
     {
+        USER_UI_ExitPageFromRegistry(ui_current_page);
         ui_current_page = page;
         ui_static_dirty = true;
+        ui_dynamic_tick = 0u;
         USER_OLED_CleanScreen();
+        USER_UI_EnterPageFromRegistry(ui_current_page);
     }
 }
 
@@ -105,5 +119,22 @@ void USER_UI_Core_RedrawStaticIfNeeded(void)
  */
 void USER_UI_Core_DrawCurrentDynamic(void)
 {
-    (void)USER_UI_DrawPageDynamicFromRegistry(ui_current_page);
+    const USER_UI_PageDef_t *page_def = USER_UI_FindPage(ui_current_page);
+    uint8_t divider = 1u;
+
+    if ((page_def != NULL) && (page_def->refresh_divider > 0u))
+    {
+        divider = page_def->refresh_divider;
+    }
+
+    if (ui_dynamic_tick == 0u)
+    {
+        (void)USER_UI_DrawPageDynamicFromRegistry(ui_current_page);
+    }
+
+    ui_dynamic_tick++;
+    if (ui_dynamic_tick >= divider)
+    {
+        ui_dynamic_tick = 0u;
+    }
 }

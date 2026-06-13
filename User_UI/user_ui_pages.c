@@ -10,18 +10,18 @@
 
 /** @brief 全局页面注册表（12 页，编译期常量） */
 static const USER_UI_PageDef_t ui_page_table[] = {
-    {PAGE_MOTOR, "Motor Control", USER_UI_ShowMotorPageStatic, USER_UI_ShowMotorPageDynamic, NULL},
-    {PAGE_ENCODER, "Encoder Data ", USER_UI_ShowEncoderPageStatic, USER_UI_ShowEncoderPageDynamic, USER_UI_EncoderOnKey},
-    {PAGE_PHOTOELECTRIC, "Photo Sensors", USER_UI_ShowPhotoelectricPageStatic, USER_UI_ShowPhotoelectricPageDynamic, USER_UI_PhotoelectricOnKey},
-    {PAGE_ADC, "ADC Data     ", USER_UI_ShowAdcPageStatic, USER_UI_ShowAdcPageDynamic, NULL},
-    {PAGE_LIDAR, "LiDAR Sensors", USER_UI_ShowLidarPageStatic, USER_UI_ShowLidarPageDynamic, USER_UI_LidarOnKey},
-    {PAGE_GYROSCOPE, "IMU Data     ", USER_UI_ShowGyroscopePageStatic, USER_UI_ShowGyroscopePageDynamic, USER_UI_GyroscopeOnKey},
-    {PAGE_IMU_SUM, "IMU Sum Data ", USER_UI_ShowIMUSumPageStatic, USER_UI_ShowIMUSumPageDynamic, USER_UI_IMUSumOnKey},
-    {PAGE_CAMERA, "Smart Camera ", USER_UI_ShowCameraPageStatic, USER_UI_ShowCameraPageDynamic, NULL},
-    {PAGE_SERVO, "Servo Control", USER_UI_ShowActuatorPageStatic, USER_UI_ShowActuatorPageDynamic, NULL},
-    {PAGE_DEBUG, "Threads      ", USER_UI_ShowDebugPageStatic, USER_UI_ShowDebugPageDynamic, NULL},
-    {PAGE_TEMPLATE, "Template Path", USER_UI_ShowRouteStatic, USER_UI_ShowRouteDynamic, USER_UI_RouteOnKey},
-    {PAGE_UNITTEST, "UnitTest     ", USER_UI_ShowUnitTestStatic, USER_UI_ShowUnitTestDynamic, USER_UI_UnitTestOnKey},
+    {PAGE_MOTOR, "Motor Control", USER_UI_ShowMotorPageStatic, USER_UI_ShowMotorPageDynamic, NULL, NULL, NULL, 1u},
+    {PAGE_ENCODER, "Encoder Data ", USER_UI_ShowEncoderPageStatic, USER_UI_ShowEncoderPageDynamic, USER_UI_EncoderOnKey, NULL, NULL, 1u},
+    {PAGE_PHOTOELECTRIC, "Photo Sensors", USER_UI_ShowPhotoelectricPageStatic, USER_UI_ShowPhotoelectricPageDynamic, USER_UI_PhotoelectricOnKey, NULL, NULL, 1u},
+    {PAGE_ADC, "ADC Data     ", USER_UI_ShowAdcPageStatic, USER_UI_ShowAdcPageDynamic, NULL, NULL, NULL, 1u},
+    {PAGE_LIDAR, "LiDAR Sensors", USER_UI_ShowLidarPageStatic, USER_UI_ShowLidarPageDynamic, USER_UI_LidarOnKey, NULL, NULL, 1u},
+    {PAGE_GYROSCOPE, "IMU Data     ", USER_UI_ShowGyroscopePageStatic, USER_UI_ShowGyroscopePageDynamic, USER_UI_GyroscopeOnKey, NULL, NULL, 1u},
+    {PAGE_IMU_SUM, "IMU Sum Data ", USER_UI_ShowIMUSumPageStatic, USER_UI_ShowIMUSumPageDynamic, USER_UI_IMUSumOnKey, NULL, NULL, 1u},
+    {PAGE_CAMERA, "Smart Camera ", USER_UI_ShowCameraPageStatic, USER_UI_ShowCameraPageDynamic, NULL, NULL, NULL, 4u},
+    {PAGE_SERVO, "Servo Control", USER_UI_ShowActuatorPageStatic, USER_UI_ShowActuatorPageDynamic, NULL, NULL, NULL, 1u},
+    {PAGE_THREADS, "Threads      ", USER_UI_ShowThreadsPageStatic, USER_UI_ShowThreadsPageDynamic, USER_UI_ThreadsOnKey, USER_UI_ThreadsOnEnter, NULL, 4u},
+    {PAGE_TEMPLATE, "Template Path", USER_UI_ShowRouteStatic, USER_UI_ShowRouteDynamic, USER_UI_RouteOnKey, NULL, USER_UI_RouteOnExit, 1u},
+    {PAGE_UNITTEST, "UnitTest     ", USER_UI_ShowUnitTestStatic, USER_UI_ShowUnitTestDynamic, USER_UI_UnitTestOnKey, NULL, NULL, 4u},
 };
 
 /**

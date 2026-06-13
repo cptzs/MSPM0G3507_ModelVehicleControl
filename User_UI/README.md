@@ -3,6 +3,7 @@
 ## 架构概览
 
 ```
+USER_UI_Init() [启动时显式初始化]
 USER_UI_Task() [core.c, 每 5ms 由调度器调用]
   ├─ 路线启动交互（充电→倒计时→启动）[route_context.c]
   ├─ PREV/NEXT 页面导航事件 [core_state.c]
@@ -15,7 +16,7 @@ USER_UI_Task() [core.c, 每 5ms 由调度器调用]
 
 | 文件 | 功能 |
 |------|------|
-| `user_ui_public.h` | **对外唯一公开接口** — 仅声明 `USER_UI_Task()` |
+| `user_ui_public.h` | **对外唯一公开接口** — 声明 `USER_UI_Init()` 和 `USER_UI_Task()` |
 | `user_ui_internal.h` | UI 内部共享：页面枚举（12页）、描述符结构、页面函数声明、驱动头引用 |
 | `user_ui_core.c` | 主循环：注册表驱动页面导航、按键分发、路线交互优先级 |
 | `user_ui_core_state.c` | 核心状态：当前页 + 静态脏标志维护 |
@@ -28,7 +29,7 @@ USER_UI_Task() [core.c, 每 5ms 由调度器调用]
 | `user_ui_page_imu_sum.c` | IMU 积分汇总页面：sum_gyroz 等累计量 |
 | `user_ui_page_camera.c` | 智能相机页面（预留） |
 | `user_ui_page_actuator.c` | 执行器页面：舵机控制 |
-| `user_ui_page_debug.c` | 线程调试页面：调度器各任务耗时统计 |
+| `user_ui_page_threads.c` | 线程统计页面：调度器各任务耗时统计 |
 | `user_ui_page_route.c` | 路线页面：赛道图形 + 动作预览 + ENTER 长按启动 |
 | `user_ui_page_unittest.c` | 单元测试页面：12 项硬件测试（电机/IMU/蜂鸣器/LED等） |
 | `user_ui_unittest_actions.c/h` | UnitTest 硬件动作封装层 |
@@ -42,8 +43,11 @@ typedef struct {
     DisplayPage_t page;                    // 页面枚举值
     const char *title;                     // 标题（固定 13 字符宽）
     USER_UI_PageDrawFunc_t show_static;    // 静态绘制（页面切换时调用一次）
-    USER_UI_PageDrawFunc_t show_dynamic;   // 动态刷新（每 5ms 周期调用）
+    USER_UI_PageDrawFunc_t show_dynamic;   // 动态刷新（按页面分频调用）
     USER_UI_PageKeyFunc_t on_key;          // 按键回调（NULL=无交互）
+    USER_UI_PageLifecycleFunc_t on_enter;  // 进入页面回调
+    USER_UI_PageLifecycleFunc_t on_exit;   // 离开页面回调
+    uint8_t refresh_divider;               // 5ms 基准周期的刷新分频
 } USER_UI_PageDef_t;
 ```
 
@@ -64,7 +68,8 @@ typedef struct {
 
 ### 4. 逐行/逐项轮询刷新
 
-每个页面的动态绘制函数每周期只刷新 1 行/1 项数据，降低 OLED SPI 瞬时负载。
+高频数据页的动态绘制函数每周期只刷新 1 行/1 项数据。Threads、UnitTest
+和 Camera 页采用 4 分频，即每 20ms 调用一次动态绘制，降低格式化和整页重绘负载。
 
 ### 5. 路线交互优先级
 
@@ -84,7 +89,7 @@ typedef struct {
 | 7 | `PAGE_IMU_SUM` | IMU Sum Data | `page_imu_sum.c` | ENTER 清零积分量 |
 | 8 | `PAGE_CAMERA` | Smart Camera | `page_camera.c` | 无（预留） |
 | 9 | `PAGE_SERVO` | Servo Control | `page_actuator.c` | 无 |
-| 10 | `PAGE_DEBUG` | Threads | `page_debug.c` | UP/DN 滚动查看任务 |
+| 10 | `PAGE_THREADS` | Threads | `page_threads.c` | UP/DN 滚动；ENTER 长按清除最大耗时 |
 | 11 | `PAGE_TEMPLATE` | Template Path | `page_route.c` | ENTER 长按启动, ESC 取消 |
 | 12 | `PAGE_UNITTEST` | UnitTest | `page_unittest.c` | UP/DN 选测试项, ENTER 执行 |
 
@@ -103,11 +108,12 @@ typedef struct {
 ## 路线启动交互
 
 ```
-IDLE → (ENTER 按下) → CHARGING（2s 充电进度条）
-  → (2s 满) → COUNTDOWN（2s 倒计时）
+IDLE → (ENTER 按下) → CHARGING（持续按住 2s）
+  → (2s 满) → COUNTDOWN（继续按住 2s）
   → 调用 USER_Race_RequestStart() → 回到 IDLE
 
-任意时刻松开 ENTER 或按 ESC → 取消，回到 IDLE
+充电或倒计时阶段松开 ENTER，或按 ESC，都会取消并回到 IDLE。
+离开路线页面时也会通过 `on_exit` 自动取消未完成流程。
 ```
 
 ## UnitTest 测试项

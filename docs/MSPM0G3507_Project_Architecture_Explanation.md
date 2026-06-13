@@ -193,8 +193,7 @@ OLED UI (每5ms) ──► ENTER长按 ──► 充电→倒计时→启动
 | `mcm` | 10ms | 2 | 非阻塞运动控制 |
 | `race` | 10ms | 3 | 路线调度推进 |
 | `lidar` | 5ms | 4 | LiDAR 轮询 |
-| `ui` | 5ms | 6 | OLED UI 刷新 |
-| `heartbeat` | 500ms | 10 | LED 心跳 |
+| `ui` | 5ms | 6 | OLED UI 刷新 + 500ms LED 心跳 |
 
 ---
 

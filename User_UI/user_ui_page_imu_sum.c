@@ -1,5 +1,8 @@
 #include "user_ui_internal.h"
 
+#include "globals.h"
+#include "userlib_oled.h"
+
 /**
  * @file user_ui_page_imu_sum.c
  * @brief IMU 累计和数据页面。

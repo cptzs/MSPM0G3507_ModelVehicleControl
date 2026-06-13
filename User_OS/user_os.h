@@ -56,6 +56,8 @@ uint8_t USER_OS_RegisterTask(const char *name,
 
 bool USER_OS_SetTaskEnabled(uint8_t task_id, bool enabled);
 bool USER_OS_GetTaskStats(uint8_t task_id, USER_OS_TaskStats_t *stats);
+bool USER_OS_ClearTaskMaxCost(uint8_t task_id);
+void USER_OS_ClearAllTaskMaxCost(void);
 uint8_t USER_OS_GetTaskCount(void);
 uint32_t USER_OS_GetTick(void);
 

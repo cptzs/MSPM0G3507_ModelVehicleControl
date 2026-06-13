@@ -9,6 +9,11 @@
 
 #include "user_ui_internal.h"
 
+#include <stdio.h>
+
+#include "userlib_oled.h"
+#include "userapp_race.h"
+
 /** @brief 赛道图形绘制区域左上角 X */
 #define UI_ROUTE_MAP_X 0u
 #define UI_ROUTE_MAP_Y 0u
@@ -237,17 +242,6 @@ void USER_UI_ShowRouteDynamic(void)
     char step_text[13];
     bool has_action = false;
 
-    if (!USER_UI_Route_IsBusy())
-    {
-        if (press_time > 0u)
-        {
-            USER_UI_Route_StartCharge(RACE_ROUTE_TEMPLATE);
-            USER_OLED_CleanScreen();
-            USER_UI_Core_MarkStaticDirty();
-            return;
-        }
-    }
-
     if (USER_UI_Route_IsCharging())
     {
         if (press_time >= UI_ROUTE_CHARGE_TIME_MS)
@@ -335,10 +329,15 @@ void USER_UI_ShowRouteDynamic(void)
  */
 void USER_UI_RouteOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
-    if ((key == ESC) && (event == USER_UI_KEY_EVENT_SHORT))
+    if ((key == ESC) && (event != USER_UI_KEY_EVENT_NONE))
     {
         USER_UI_Route_CancelCharge();
         USER_OLED_CleanScreen();
         USER_UI_Core_MarkStaticDirty();
     }
+}
+
+void USER_UI_RouteOnExit(void)
+{
+    USER_UI_Route_CancelCharge();
 }

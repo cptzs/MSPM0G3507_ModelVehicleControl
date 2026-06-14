@@ -8,17 +8,10 @@
  */
 
 #include "user_ui_internal.h"
-
-#include <stdio.h>
+#include "user_ui_route_map.h"
 
 #include "userlib_oled.h"
 #include "userapp_race.h"
-
-/** @brief 赛道图形绘制区域左上角 X */
-#define UI_ROUTE_MAP_X 0u
-#define UI_ROUTE_MAP_Y 0u
-#define UI_ROUTE_MAP_W 60u
-#define UI_ROUTE_MAP_H 54u
 
 #define UI_ROUTE_INFO_COL 10u
 #define UI_ROUTE_BAR_X 70u
@@ -26,6 +19,8 @@
 #define UI_ROUTE_BAR_W 42u
 #define UI_ROUTE_BAR_H 6u
 #define UI_ROUTE_CHARGE_TIME_MS 2000u
+
+static uint8_t s_route_last_progress = 0xFFu;
 
 /**
  * @brief 返回 int16_t 的绝对值（uint16_t）。
@@ -40,35 +35,111 @@ static uint16_t USER_UI_RouteAbsI16(int16_t value)
     return (uint16_t)value;
 }
 
-/**
- * @brief 绘制标准赛道模板图形（双竖线 + 两端半圆 + 方向箭头 + 外框）。
- */
-static void USER_UI_RouteDrawTemplatePath(void)
+static uint16_t USER_UI_RouteDiv10U16(uint16_t value)
 {
-    const uint8_t left_x = 10u;
-    const uint8_t right_x = 42u;
-    const uint8_t top_y = 14u;
-    const uint8_t bottom_y = 56u;
-    const uint8_t center_x = 26u;
-    const uint8_t radius = 16u;
+    return (uint16_t)(((uint32_t)value * 52429u) >> 19);
+}
 
-    USER_OLED_DrawRect(UI_ROUTE_MAP_X,
-                       UI_ROUTE_MAP_Y,
-                       UI_ROUTE_MAP_X + UI_ROUTE_MAP_W - 1u,
-                       UI_ROUTE_MAP_Y + UI_ROUTE_MAP_H - 1u,
-                       false);
+static uint16_t USER_UI_RouteDiv100U16(uint16_t value)
+{
+    return USER_UI_RouteDiv10U16(USER_UI_RouteDiv10U16(value));
+}
 
-    USER_OLED_DrawVLine(left_x, top_y, bottom_y);
-    USER_OLED_DrawVLine(right_x, top_y, bottom_y);
+static uint8_t USER_UI_RouteChargePercent(uint16_t press_time)
+{
+    return (uint8_t)(USER_UI_RouteDiv10U16(press_time) >> 1);
+}
 
-    USER_OLED_DrawArc(center_x, top_y, radius, 0, 180);
-    USER_OLED_DrawArc(center_x, bottom_y, radius, 180, 360);
+static void USER_UI_RouteAppendChar(char **cursor, uint8_t *remaining, char ch)
+{
+    if (*remaining == 0u)
+    {
+        return;
+    }
 
-    USER_OLED_DrawLine(left_x, 28u, (uint8_t)(left_x - 3u), 32u);
-    USER_OLED_DrawLine(left_x, 28u, (uint8_t)(left_x + 3u), 32u);
+    **cursor = ch;
+    (*cursor)++;
+    (*remaining)--;
+}
 
-    USER_OLED_DrawLine(right_x, 42u, (uint8_t)(right_x - 3u), 38u);
-    USER_OLED_DrawLine(right_x, 42u, (uint8_t)(right_x + 3u), 38u);
+static void USER_UI_RouteAppendText(char **cursor, uint8_t *remaining, const char *text)
+{
+    while ((text != NULL) && (*text != '\0') && (*remaining > 0u))
+    {
+        USER_UI_RouteAppendChar(cursor, remaining, *text);
+        text++;
+    }
+}
+
+static void USER_UI_RouteAppend2Digit(char **cursor, uint8_t *remaining, uint8_t value)
+{
+    uint8_t hundreds = 0u;
+    uint8_t tens = 0u;
+
+    if (value >= 100u)
+    {
+        while (value >= 100u)
+        {
+            value = (uint8_t)(value - 100u);
+            hundreds++;
+        }
+        USER_UI_RouteAppendChar(cursor, remaining, (char)('0' + hundreds));
+    }
+
+    while (value >= 10u)
+    {
+        value = (uint8_t)(value - 10u);
+        tens++;
+    }
+
+    USER_UI_RouteAppendChar(cursor, remaining, (char)('0' + tens));
+    USER_UI_RouteAppendChar(cursor, remaining, (char)('0' + value));
+}
+
+static void USER_UI_RouteAppendU16(char **cursor, uint8_t *remaining, uint16_t value)
+{
+    static const uint16_t dec_place[] = {10000u, 1000u, 100u, 10u, 1u};
+    uint8_t place = 0u;
+    bool started = false;
+
+    while (place < (uint8_t)(sizeof(dec_place) / sizeof(dec_place[0])))
+    {
+        uint8_t digit = 0u;
+        const uint16_t divisor = dec_place[place++];
+
+        while (value >= divisor)
+        {
+            value = (uint16_t)(value - divisor);
+            digit++;
+        }
+
+        if ((digit != 0u) || started || (divisor == 1u))
+        {
+            USER_UI_RouteAppendChar(cursor, remaining, (char)('0' + digit));
+            started = true;
+        }
+    }
+}
+
+static void USER_UI_RouteFormatFixedText(const char *text, char *out_buf, uint8_t out_len)
+{
+    char *cursor;
+    uint8_t remaining;
+
+    if ((out_buf == NULL) || (out_len == 0u))
+    {
+        return;
+    }
+
+    for (remaining = 0u; remaining < (uint8_t)(out_len - 1u); remaining++)
+    {
+        out_buf[remaining] = ' ';
+    }
+    out_buf[out_len - 1u] = '\0';
+
+    cursor = out_buf;
+    remaining = (uint8_t)(out_len - 1u);
+    USER_UI_RouteAppendText(&cursor, &remaining, text);
 }
 
 /**
@@ -85,7 +156,7 @@ static void USER_UI_RouteDrawProgressBar(uint8_t percent)
         percent = 100u;
     }
 
-    fill_w = (uint8_t)(((uint16_t)(UI_ROUTE_BAR_W - 2u) * percent) / 100u);
+    fill_w = (uint8_t)USER_UI_RouteDiv100U16((uint16_t)((uint16_t)(UI_ROUTE_BAR_W - 2u) * percent));
 
     USER_OLED_DrawRect(UI_ROUTE_BAR_X,
                        UI_ROUTE_BAR_Y,
@@ -118,6 +189,8 @@ static void USER_UI_RouteFormatStepText(const USER_Race_Action_t *action_ptr,
 {
     uint16_t main_value = 0u;
     uint8_t step_no;
+    char *cursor;
+    uint8_t remaining;
 
     if ((out_buf == NULL) || (out_len == 0u))
     {
@@ -126,53 +199,64 @@ static void USER_UI_RouteFormatStepText(const USER_Race_Action_t *action_ptr,
 
     if ((action_ptr == NULL) || (step_index < 0))
     {
-        (void)snprintf(out_buf, out_len, "S-- IDLE");
+        USER_UI_RouteFormatFixedText("S-- IDLE", out_buf, out_len);
         return;
     }
 
+    USER_UI_RouteFormatFixedText("", out_buf, out_len);
+    cursor = out_buf;
+    remaining = (uint8_t)(out_len - 1u);
+
     step_no = (uint8_t)(step_index + 1u);
+
+    USER_UI_RouteAppendChar(&cursor, &remaining, 'S');
+    USER_UI_RouteAppend2Digit(&cursor, &remaining, step_no);
+    USER_UI_RouteAppendChar(&cursor, &remaining, ' ');
 
     switch (action_ptr->action_type)
     {
     case USER_Race_ACTION_MOVE_DISTANCE:
-        main_value = (uint16_t)(USER_UI_RouteAbsI16((int16_t)action_ptr->param1) / 10u);
+        main_value = USER_UI_RouteDiv10U16(USER_UI_RouteAbsI16((int16_t)action_ptr->param1));
         if (action_ptr->param1 >= 0.0f)
         {
-            (void)snprintf(out_buf, out_len, "S%02u FW %u", step_no, main_value);
+            USER_UI_RouteAppendText(&cursor, &remaining, "FW ");
         }
         else
         {
-            (void)snprintf(out_buf, out_len, "S%02u BW %u", step_no, main_value);
+            USER_UI_RouteAppendText(&cursor, &remaining, "BW ");
         }
+        USER_UI_RouteAppendU16(&cursor, &remaining, main_value);
         break;
 
     case USER_Race_ACTION_ROTATE_ANGLE:
         main_value = USER_UI_RouteAbsI16((int16_t)action_ptr->param1);
         if (action_ptr->param1 >= 0.0f)
         {
-            (void)snprintf(out_buf, out_len, "S%02u TR %u", step_no, main_value);
+            USER_UI_RouteAppendText(&cursor, &remaining, "TR ");
         }
         else
         {
-            (void)snprintf(out_buf, out_len, "S%02u TL %u", step_no, main_value);
+            USER_UI_RouteAppendText(&cursor, &remaining, "TL ");
         }
+        USER_UI_RouteAppendU16(&cursor, &remaining, main_value);
         break;
 
     case USER_Race_ACTION_WAIT_MS:
         main_value = (uint16_t)action_ptr->param1;
-        (void)snprintf(out_buf, out_len, "S%02u WT %u", step_no, main_value);
+        USER_UI_RouteAppendText(&cursor, &remaining, "WT ");
+        USER_UI_RouteAppendU16(&cursor, &remaining, main_value);
         break;
 
     case USER_Race_ACTION_STOP:
-        (void)snprintf(out_buf, out_len, "S%02u STP", step_no);
+        USER_UI_RouteAppendText(&cursor, &remaining, "STP");
         break;
 
     case USER_Race_ACTION_END:
-        (void)snprintf(out_buf, out_len, "S%02u END", step_no);
+        USER_UI_RouteAppendText(&cursor, &remaining, "END");
         break;
 
     default:
-        (void)snprintf(out_buf, out_len, "S%02u N/A", step_no);
+        USER_UI_RouteAppendText(&cursor, &remaining, "N/A");
         break;
     }
 }
@@ -216,11 +300,16 @@ static bool USER_UI_RouteGetDisplayAction(USER_Race_Action_t *action_ptr,
  */
 void USER_UI_ShowRouteStatic(void)
 {
-    USER_UI_RouteDrawTemplatePath();
+    USER_UI_RouteMap_Draw(RACE_ROUTE_TEMPLATE);
 
-    USER_OLED_putString(2u, UI_ROUTE_INFO_COL, "R00     ", 11u);
+    USER_OLED_putString(2u, UI_ROUTE_INFO_COL, "R00 ", 4u);
+    USER_OLED_putString(2u,
+                        UI_ROUTE_INFO_COL + 4u,
+                        USER_Race_GetRouteName(RACE_ROUTE_TEMPLATE),
+                        7u);
     USER_OLED_putString(3u, UI_ROUTE_INFO_COL, "HOLD", 4u);
     USER_UI_RouteDrawProgressBar(0u);
+    s_route_last_progress = 0u;
     USER_OLED_putString(5u, UI_ROUTE_INFO_COL, "S-- IDLE", 8u);
     USER_OLED_putString(6u, UI_ROUTE_INFO_COL, "TMO ----", 8u);
 }
@@ -242,7 +331,11 @@ void USER_UI_ShowRouteDynamic(void)
     char step_text[13];
     bool has_action = false;
 
-    if (USER_UI_Route_IsCharging())
+    if (USER_UI_Route_IsWaitingRelease())
+    {
+        progress = 100u;
+    }
+    else if (USER_UI_Route_IsCharging())
     {
         if (press_time >= UI_ROUTE_CHARGE_TIME_MS)
         {
@@ -250,7 +343,7 @@ void USER_UI_ShowRouteDynamic(void)
         }
         else
         {
-            progress = (uint8_t)(((uint32_t)press_time * 100u) / UI_ROUTE_CHARGE_TIME_MS);
+            progress = USER_UI_RouteChargePercent(press_time);
         }
     }
     else if (USER_UI_Route_IsCountdown())
@@ -262,22 +355,21 @@ void USER_UI_ShowRouteDynamic(void)
         progress = 0u;
     }
 
-    USER_OLED_putString(2u, UI_ROUTE_INFO_COL, "           ", 11u);
-    USER_OLED_putString(2u, UI_ROUTE_INFO_COL, "R00 ", 4u);
-    USER_OLED_putString(2u,
-                        UI_ROUTE_INFO_COL + 4u,
-                        USER_Race_GetRouteName(RACE_ROUTE_TEMPLATE),
-                        7u);
+    USER_OLED_putString(3u,
+                        UI_ROUTE_INFO_COL,
+                        USER_UI_Route_IsWaitingRelease() ? "REL " : "HOLD",
+                        4u);
 
-    USER_OLED_putString(3u, UI_ROUTE_INFO_COL, "    ", 4u);
-    USER_OLED_putString(3u, UI_ROUTE_INFO_COL, "HOLD", 4u);
-
-    USER_UI_RouteDrawProgressBar(progress);
+    if (progress != s_route_last_progress)
+    {
+        USER_UI_RouteDrawProgressBar(progress);
+        s_route_last_progress = progress;
+    }
 
     if (USER_UI_Route_IsCountdown())
     {
-        USER_OLED_putString(5u, UI_ROUTE_INFO_COL, "             ", 13u);
-        USER_OLED_putString(5u, UI_ROUTE_INFO_COL, "S-- START", 9u);
+        USER_UI_RouteFormatFixedText("S-- START", step_text, sizeof(step_text));
+        USER_OLED_putString(5u, UI_ROUTE_INFO_COL, step_text, 12u);
     }
     else
     {
@@ -291,7 +383,6 @@ void USER_UI_ShowRouteDynamic(void)
             USER_UI_RouteFormatStepText(NULL, -1, step_text, sizeof(step_text));
         }
 
-        USER_OLED_putString(5u, UI_ROUTE_INFO_COL, "             ", 13u);
         USER_OLED_putString(5u, UI_ROUTE_INFO_COL, step_text, 12u);
     }
 

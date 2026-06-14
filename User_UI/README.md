@@ -1,141 +1,129 @@
-﻿# User_UI — 注册表驱动的 OLED 多页面框架
+# User_UI — 分级菜单驱动的 OLED UI
 
 ## 架构概览
 
+```text
+USER_UI_Init()
+USER_UI_Task()                 // 5ms 调度
+  ├─ MAIN MENU                 // Run Route / Auto Pilot / Sensors / Service / Setting
+  ├─ SUB MENU                  // 当前一级分类下的页面列表
+  ├─ PAGE VIEW                 // 复用原页面 show_static/show_dynamic/on_key
+  ├─ PLACEHOLDER               // SOON 功能统一占位
+  ├─ Route busy priority       // 路线充电/倒计时中优先处理 ESC 取消
+  └─ OLED service              // 双缓冲 OLED 定期送显
 ```
-USER_UI_Init() [启动时显式初始化]
-USER_UI_Task() [core.c, 每 5ms 由调度器调用]
-  ├─ 路线启动交互（充电→倒计时→启动）[route_context.c]
-  ├─ PREV/NEXT 页面导航事件 [core_state.c]
-  ├─ 按键分发到当前页 on_key() [input.c → dispatch.c → page_*.c]
-  ├─ 静态内容脏刷新 [dispatch.c + core_state.c]
-  └─ 动态内容逐行/逐项轮询刷新 [dispatch.c → page_*.c]
-```
+
+UI 入口不再直接进入某个业务页面。上电后进入 `MAIN MENU`，按 `ENTER` 进入一级分类，再按 `ENTER` 打开二级页面。
 
 ## 文件说明
 
 | 文件 | 功能 |
-|------|------|
-| `user_ui_public.h` | **对外唯一公开接口** — 声明 `USER_UI_Init()` 和 `USER_UI_Task()` |
-| `user_ui_internal.h` | UI 内部共享：页面枚举（12页）、描述符结构、页面函数声明、驱动头引用 |
-| `user_ui_core.c` | 主循环：注册表驱动页面导航、按键分发、路线交互优先级 |
-| `user_ui_core_state.c` | 核心状态：当前页 + 静态脏标志维护 |
-| `user_ui_dispatch.c` | 通用分发：查表绘制静态/动态、分发按键、获取相邻页 |
-| `user_ui_input.c` | 输入适配：将底层 `USER_LBB_ButtonEvent_t` 转为 `USER_UI_KeyEvent_t` |
-| `user_ui_pages.c` | **页面注册表** — 编译期静态数组，12 页描述符 |
-| `user_ui_route_context.c` | 路线启动交互状态机（充电 2s → 倒计时 2s → 启动） |
-| `user_ui_page_motor.c` | 电机页面：左右轮 PID 7 行数据逐行刷新 |
-| `user_ui_page_sensors.c` | 传感器页面：编码器(3路) / 光电(8路) / ADC / LiDAR(4路) / IMU |
-| `user_ui_page_imu_sum.c` | IMU 积分汇总页面：sum_gyroz 等累计量 |
-| `user_ui_page_camera.c` | 智能相机页面（预留） |
-| `user_ui_page_actuator.c` | 执行器页面：舵机控制 |
-| `user_ui_page_threads.c` | 线程统计页面：调度器各任务耗时统计 |
-| `user_ui_page_route.c` | 路线页面：赛道图形 + 动作预览 + ENTER 长按启动 |
-| `user_ui_page_unittest.c` | 单元测试页面：12 项硬件测试（电机/IMU/蜂鸣器/LED等） |
-| `user_ui_unittest_actions.c/h` | UnitTest 硬件动作封装层 |
+| --- | --- |
+| `user_ui_public.h` | 对外公开 `USER_UI_Init()` / `USER_UI_Task()` |
+| `user_ui_internal.h` | UI 内部类型、页面枚举、页面描述符和函数声明 |
+| `user_ui_core.c` | 5ms 主循环、视图分支、按键消费、路线忙碌优先级 |
+| `user_ui_core_state.c` | 当前视图、当前页面、菜单光标和静态脏标志 |
+| `user_ui_menu.c/h` | 一级/二级菜单数据表、菜单绘制和同分类页面查找 |
+| `user_ui_dispatch.c` | 页面注册表分发：静态/动态绘制、按键回调、生命周期 |
+| `user_ui_input.c` | 底层 LBB 按键事件到 UI 事件的转换 |
+| `user_ui_pages.c` | 12 个页面描述符注册表 |
+| `user_ui_page_*.c` | 各页面静态布局、动态刷新和页面内按键逻辑 |
+| `user_ui_route_context.c` | 路线启动交互状态机 |
+| `user_ui_route_map.c/h` | 路线示意图图元表 |
+| `user_ui_unittest_actions.c/h` | Hardware Test 动作封装 |
 
-## 核心设计模式
+## 一级菜单
 
-### 1. 页面描述符注册表
+| 一级分类 | 用途 |
+| --- | --- |
+| Run Route | 固定路线选择与启动 |
+| Auto Pilot | 自动驾驶算法槽，当前为 SOON 占位 |
+| Sensors | 传感器观察、校准和输入诊断 |
+| Service | 工程维护、执行器手动控制、硬件测试和系统诊断 |
+| Setting | PID、运动参数和系统参数设置，当前为 SOON 占位 |
 
-```c
-typedef struct {
-    DisplayPage_t page;                    // 页面枚举值
-    const char *title;                     // 标题（固定 13 字符宽）
-    USER_UI_PageDrawFunc_t show_static;    // 静态绘制（页面切换时调用一次）
-    USER_UI_PageDrawFunc_t show_dynamic;   // 动态刷新（按页面分频调用）
-    USER_UI_PageKeyFunc_t on_key;          // 按键回调（NULL=无交互）
-    USER_UI_PageLifecycleFunc_t on_enter;  // 进入页面回调
-    USER_UI_PageLifecycleFunc_t on_exit;   // 离开页面回调
-    uint8_t refresh_divider;               // 5ms 基准周期的刷新分频
-} USER_UI_PageDef_t;
-```
+## 二级页面归类
 
-注册表定义在 `user_ui_pages.c` 中，编译期常量，决定 PREV/NEXT 导航顺序。
+| 一级分类 | 二级项目 | 页面 |
+| --- | --- | --- |
+| Run Route | Fixed Route | `PAGE_TEMPLATE` |
+| Auto Pilot | Photo Pilot | SOON |
+| Auto Pilot | Vision Pilot | SOON |
+| Auto Pilot | Fusion Pilot | SOON |
+| Sensors | Encoder Data | `PAGE_ENCODER` |
+| Sensors | Photo Sensors | `PAGE_PHOTOELECTRIC` |
+| Sensors | IMU Data | `PAGE_GYROSCOPE` |
+| Sensors | IMU Sum Data | `PAGE_IMU_SUM` |
+| Sensors | Smart Camera | `PAGE_CAMERA` |
+| Sensors | ADC Data | `PAGE_ADC` |
+| Sensors | LiDAR Sensors | `PAGE_LIDAR` |
+| Service | Hardware Test | `PAGE_UNITTEST` |
+| Service | Motor PID Monitor | `PAGE_MOTOR` |
+| Service | Servo Manual | `PAGE_SERVO` |
+| Service | Thread Stats | `PAGE_THREADS` |
+| Setting | Motor PID / Motion Params / Servo Params / System | SOON |
 
-### 2. 静态/动态分离
+## 按键规则
 
-- **静态内容**：标题行 `[XX] Title` + 固定标签文字。仅在页面切换时绘制一次。
-- **动态内容**：传感器数值等变化数据，每周期刷新。
+| 位置 | 按键 | 行为 |
+| --- | --- | --- |
+| MAIN MENU | UP/DOWN 或 PREV/NEXT | 移动一级分类 |
+| MAIN MENU | ENTER | 进入二级列表 |
+| SUB MENU | UP/DOWN 或 PREV/NEXT | 移动二级项目 |
+| SUB MENU | ENTER | 打开页面或 SOON 占位 |
+| SUB MENU | ESC | 返回 MAIN MENU |
+| PAGE VIEW | PREV/NEXT | 仅切换当前分类内的相邻页面 |
+| PAGE VIEW | ESC | 返回所属二级列表 |
+| PLACEHOLDER | ESC | 返回所属二级列表 |
 
-由 `core_state.c` 的 `ui_static_dirty` 标志控制。
+页面内的 `UP/DOWN/LEFT/RIGHT/ENTER` 继续交给当前页面处理。
 
-### 3. 事件消费模型
+## ESC 冲突处理
 
-底层 LBB 驱动提供"计数型"按钮事件（SHORT/LONG/LONG_REPEAT），
-`input.c` 的 `USER_UI_ConsumeButtonEvent()` **读取并清除**事件计数器，
-防止同一事件被多次处理。
+`ESC` 现在作为全局返回键使用。当前特殊页面处理如下：
 
-### 4. 逐行/逐项轮询刷新
+| 页面 | 当前策略 |
+| --- | --- |
+| Fixed Route | 忙碌时 `ESC` 取消充电/倒计时/路线流程；空闲时返回二级列表 |
+| Photo Sensors | `ESC` 不再调阈值；LEFT/RIGHT 调阈值，ENTER 自动校准 |
+| IMU Data | `ESC` 不再设置 yaw reference；ENTER 短按设 angle reference，长按设 yaw reference |
+| Servo Manual | MAN 模式下 `ESC` 先通过 `on_exit` 释放 UI 控制权，再返回二级列表 |
 
-高频数据页的动态绘制函数每周期只刷新 1 行/1 项数据。Threads、UnitTest
-和 Camera 页采用 4 分频，即每 20ms 调用一次动态绘制，降低格式化和整页重绘负载。
+## 页面摘要
 
-### 5. 路线交互优先级
-
-`USER_UI_Route_IsBusy()` 为真时（充电/倒计时阶段），主循环**阻止页面导航**，
-确保比赛启动过程不被 PREV/NEXT 中断。
-
-## 页面列表
-
-| # | 枚举 | 标题 | 文件 | 按键交互 |
-|---|------|------|------|---------|
-| 1 | `PAGE_MOTOR` | Motor Control | `page_motor.c` | 无（纯显示 7 行 PID 数据） |
-| 2 | `PAGE_ENCODER` | Encoder Data | `page_sensors.c` | UP/DN 切换编码器, ENTER 清零 |
-| 3 | `PAGE_PHOTOELECTRIC` | Photo Sensors | `page_sensors.c` | 全按键支持（UP/DN/LEFT/RIGHT/ENTER/ESC） |
-| 4 | `PAGE_ADC` | ADC Data | `page_sensors.c` | 无 |
-| 5 | `PAGE_LIDAR` | LiDAR Sensors | `page_sensors.c` | UP/DN 选择传感器 |
-| 6 | `PAGE_GYROSCOPE` | IMU Data | `page_sensors.c` | ENTER/ESC 校准 |
-| 7 | `PAGE_IMU_SUM` | IMU Sum Data | `page_imu_sum.c` | ENTER 清零积分量 |
-| 8 | `PAGE_CAMERA` | Smart Camera | `page_camera.c` | 无（预留） |
-| 9 | `PAGE_SERVO` | Servo Control | `page_actuator.c` | 无 |
-| 10 | `PAGE_THREADS` | Threads | `page_threads.c` | UP/DN 滚动；ENTER 长按清除最大耗时 |
-| 11 | `PAGE_TEMPLATE` | Template Path | `page_route.c` | ENTER 长按启动, ESC 取消 |
-| 12 | `PAGE_UNITTEST` | UnitTest | `page_unittest.c` | UP/DN 选测试项, ENTER 执行 |
-
-## 按键事件类型
-
-| 枚举值 | 触发条件 |
-|--------|---------|
-| `USER_UI_KEY_EVENT_NONE` | 无事件 |
-| `USER_UI_KEY_EVENT_SHORT` | 短按释放 |
-| `USER_UI_KEY_EVENT_LONG` | 长按（单次触发） |
-| `USER_UI_KEY_EVENT_LONG_REPEAT` | 长按（连续触发） |
-
-物理按钮：UP / DOWN / LEFT / RIGHT / ENTER / ESC / PREV / NEXT。
-其中 PREV/NEXT 专门用于翻页导航，其余 6 个分发给当前页面。
+| 页面 | 标题 | 交互 |
+| --- | --- | --- |
+| `PAGE_MOTOR` | Motor PID Mon | 只读显示左右电机 PID 状态 |
+| `PAGE_ENCODER` | Encoder Data | UP/DOWN 选择编码器，ENTER 清零累计里程 |
+| `PAGE_PHOTOELECTRIC` | Photo Sensors | UP/DOWN 选 HIGH/LOW，LEFT/RIGHT 调阈值，ENTER 自动校准 |
+| `PAGE_ADC` | ADC Data | 只读显示 ADC/电压/温度 |
+| `PAGE_LIDAR` | LiDAR Sensors | UP/DOWN 选择 LiDAR |
+| `PAGE_GYROSCOPE` | IMU Data | ENTER 短按设角度参考，长按设偏航参考 |
+| `PAGE_IMU_SUM` | IMU Sum Data | ENTER 清零累计量 |
+| `PAGE_CAMERA` | Smart Camera | 只读/预留 |
+| `PAGE_SERVO` | Servo Manual | ENTER 进入/退出 MAN，UP/DOWN 选舵机，LEFT/RIGHT 每次 1° 调整 |
+| `PAGE_THREADS` | Threads | UP/DOWN 滚动，ENTER 长按清除最大耗时 |
+| `PAGE_TEMPLATE` | Template Path | ENTER 长按启动路线，ESC 忙碌时取消 |
+| `PAGE_UNITTEST` | UnitTest | UP/DOWN 选测试项，ENTER 执行 |
 
 ## 路线启动交互
 
+```text
+IDLE
+  -> ENTER 长按 2000ms
+  -> WAIT_RELEASE
+  -> 离手后倒计时 1000ms
+  -> USER_Race_RequestStart()
+  -> IDLE
 ```
-IDLE → (ENTER 按下) → CHARGING（持续按住 2s）
-  → (2s 满) → COUNTDOWN（继续按住 2s）
-  → 调用 USER_Race_RequestStart() → 回到 IDLE
 
-充电或倒计时阶段松开 ENTER，或按 ESC，都会取消并回到 IDLE。
-离开路线页面时也会通过 `on_exit` 自动取消未完成流程。
-```
-
-## UnitTest 测试项
-
-| # | 名称 | 动作 |
-|---|------|------|
-| 0 | MTR FWD | 电机前进 |
-| 1 | MTR REV | 电机后退 |
-| 2 | MTR SPD0 | 电机停转 |
-| 3 | MTR STOP | 电机制动 |
-| 4 | MTR COAST | 电机滑行 |
-| 5 | MTR BRAKE | 电机刹车 |
-| 6 | IMU HELLO | IMU 通信测试 |
-| 7 | USB HELLO | USB/Modbus 通信测试 |
-| 8 | CAM HELLO | 相机通信测试（N/A 预留） |
-| 9 | CAN FRAME | CAN 帧发送测试 |
-| 10 | BUZZ 1MS | 蜂鸣器测试 |
-| 11 | LED 300MS | LED 闪烁测试 |
+充电、等待离手或倒计时阶段按 `ESC` 会取消流程。离开路线页面时也会通过 `on_exit` 自动取消未完成流程。
 
 ## 添加新页面
 
-1. 创建 `user_ui_page_xxx.c`，实现 `ShowXxxStatic()`, `ShowXxxDynamic()`, `XxxOnKey()`
-2. 在 `user_ui_internal.h` 的枚举和函数声明区添加对应内容
-3. 在 `user_ui_pages.c` 的 `ui_page_table[]` 中追加条目
-4. 在 `basic.ewp` 的 `User_UI` 分组中加入 `.c` 文件
+1. 创建 `user_ui_page_xxx.c`，实现页面静态、动态和按键函数。
+2. 在 `user_ui_internal.h` 增加函数声明，必要时增加页面枚举。
+3. 在 `user_ui_pages.c` 注册页面描述符。
+4. 在 `user_ui_menu.c` 把页面加入合适的一级分类。
+5. 在 `basic.ewp` 的 `User_UI` 分组加入新 `.c` 文件。
+6. 使用 IAR `Debug` 配置全量编译验证。

@@ -9,8 +9,6 @@
 #include "user_ui_internal.h"
 #include "user_ui_unittest_actions.h"
 
-#include <stdio.h>
-
 #include "userlib_oled.h"
 
 /** @brief OLED 可见行数（第 1~6 行，第 7 行为状态栏） */
@@ -20,6 +18,51 @@
 static uint8_t unittest_selected_index = 0u;
 /** @brief 滚动窗口顶部索引 */
 static uint8_t unittest_scroll_top = 0u;
+
+static void USER_UI_UnitTest_Write2Digits(char *dst, uint8_t value)
+{
+    uint8_t tens = 0u;
+
+    if (value > 99u)
+    {
+        value = 99u;
+    }
+
+    while (value >= 10u)
+    {
+        value = (uint8_t)(value - 10u);
+        tens++;
+    }
+
+    dst[0] = (char)('0' + tens);
+    dst[1] = (char)('0' + value);
+}
+
+static void USER_UI_UnitTest_BuildLine(char *line_buf,
+                                       uint8_t item_index,
+                                       uint8_t item_count,
+                                       bool selected)
+{
+    const char *name;
+    uint8_t i;
+
+    for (i = 0u; i < 21u; i++)
+    {
+        line_buf[i] = ' ';
+    }
+    line_buf[21] = '\0';
+
+    line_buf[0] = selected ? '>' : ' ';
+    name = USER_UI_UT_Action_GetItemName(item_index);
+    for (i = 0u; (i < 12u) && (name != NULL) && (name[i] != '\0'); i++)
+    {
+        line_buf[(uint8_t)(1u + i)] = name[i];
+    }
+
+    USER_UI_UnitTest_Write2Digits(&line_buf[14], (uint8_t)(item_index + 1u));
+    line_buf[16] = '/';
+    USER_UI_UnitTest_Write2Digits(&line_buf[17], item_count);
+}
 
 /**
  * @brief 根据选中项位置自动调整滚动窗口，确保选中项始终可见。
@@ -120,17 +163,19 @@ void USER_UI_ShowUnitTestDynamic(void)
 
         if (item_index < item_count)
         {
-            (void)snprintf(line_buf,
-                           sizeof(line_buf),
-                           "%c%-12s %02u/%02u",
-                           (item_index == unittest_selected_index) ? '>' : ' ',
-                           USER_UI_UT_Action_GetItemName(item_index),
-                           (unsigned)(item_index + 1u),
-                           (unsigned)item_count);
+            USER_UI_UnitTest_BuildLine(line_buf,
+                                       item_index,
+                                       item_count,
+                                       (item_index == unittest_selected_index));
         }
         else
         {
-            (void)snprintf(line_buf, sizeof(line_buf), "%-21s", "");
+            uint8_t i;
+            for (i = 0u; i < 21u; i++)
+            {
+                line_buf[i] = ' ';
+            }
+            line_buf[21] = '\0';
         }
 
         USER_OLED_putString(oled_row, 0u, line_buf, 21u);

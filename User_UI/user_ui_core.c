@@ -1,5 +1,6 @@
 #include "user_ui_internal.h"
 #include "user_ui_unittest_actions.h"
+#include "userlib_oled.h"
 
 #define USER_UI_HEARTBEAT_PERIOD_TICKS 100u
 #define USER_UI_HEARTBEAT_ON_TIME_MS 250u
@@ -43,6 +44,12 @@ static bool USER_UI_Core_IsNavigationEvent(USER_UI_KeyEvent_t event)
            (event == USER_UI_KEY_EVENT_LONG_REPEAT);
 }
 
+static bool USER_UI_Core_IsMenuConfirmEvent(USER_UI_KeyEvent_t event)
+{
+    return (event == USER_UI_KEY_EVENT_SHORT) ||
+           (event == USER_UI_KEY_EVENT_LONG);
+}
+
 /**
  * @brief 消费指定按钮事件并分发到当前页面的 on_key() 回调。
  *
@@ -76,11 +83,66 @@ static void USER_UI_Core_DispatchPageButtons(void)
     USER_UI_Core_DispatchButtonToCurrentPage(LEFT);
     USER_UI_Core_DispatchButtonToCurrentPage(RIGHT);
     USER_UI_Core_DispatchButtonToCurrentPage(ENTER);
-    USER_UI_Core_DispatchButtonToCurrentPage(ESC);
+}
+
+static void USER_UI_Core_DispatchMenuButtons(void)
+{
+    USER_UI_ViewMode_t view_mode = USER_UI_Core_GetViewMode();
+    USER_UI_KeyEvent_t up_event = USER_UI_ConsumeButtonEvent(UP);
+    USER_UI_KeyEvent_t down_event = USER_UI_ConsumeButtonEvent(DOWN);
+    USER_UI_KeyEvent_t prev_event = USER_UI_ConsumeButtonEvent(PREV);
+    USER_UI_KeyEvent_t next_event = USER_UI_ConsumeButtonEvent(NEXT);
+    USER_UI_KeyEvent_t enter_event = USER_UI_ConsumeButtonEvent(ENTER);
+    USER_UI_KeyEvent_t esc_event = USER_UI_ConsumeButtonEvent(ESC);
+
+    (void)USER_UI_ConsumeButtonEvent(LEFT);
+    (void)USER_UI_ConsumeButtonEvent(RIGHT);
+
+    if (view_mode == UI_VIEW_MAIN_MENU)
+    {
+        if (USER_UI_Core_IsNavigationEvent(up_event) || USER_UI_Core_IsNavigationEvent(prev_event))
+        {
+            USER_UI_Core_MoveMainSelection(false);
+        }
+        if (USER_UI_Core_IsNavigationEvent(down_event) || USER_UI_Core_IsNavigationEvent(next_event))
+        {
+            USER_UI_Core_MoveMainSelection(true);
+        }
+        if (USER_UI_Core_IsMenuConfirmEvent(enter_event))
+        {
+            USER_UI_Core_OpenSelectedCategory();
+        }
+    }
+    else if (view_mode == UI_VIEW_SUB_MENU)
+    {
+        if (USER_UI_Core_IsNavigationEvent(up_event) || USER_UI_Core_IsNavigationEvent(prev_event))
+        {
+            USER_UI_Core_MoveSubSelection(false);
+        }
+        if (USER_UI_Core_IsNavigationEvent(down_event) || USER_UI_Core_IsNavigationEvent(next_event))
+        {
+            USER_UI_Core_MoveSubSelection(true);
+        }
+        if (USER_UI_Core_IsMenuConfirmEvent(enter_event))
+        {
+            USER_UI_Core_OpenSelectedItem();
+        }
+        if (esc_event != USER_UI_KEY_EVENT_NONE)
+        {
+            USER_UI_Core_Back();
+        }
+    }
+    else if (view_mode == UI_VIEW_PLACEHOLDER)
+    {
+        if (esc_event != USER_UI_KEY_EVENT_NONE)
+        {
+            USER_UI_Core_Back();
+        }
+    }
 }
 
 /**
- * @brief 路线页面专用服务：仅在当前页为 PAGE_TEMPLATE 时推进路线交互状态机。
+ * @brief 路线页面专用服务：仅在页面视图且当前页为 PAGE_TEMPLATE 时推进路线交互状态机。
  *
  * @note 每 5ms 调用一次，传入 ENTER 按键按压时间和状态以驱动充电→倒计时流程。
  */
@@ -88,7 +150,8 @@ static bool USER_UI_Core_ServiceRoutePage(void)
 {
     bool was_busy;
 
-    if (USER_UI_Core_GetCurrentPage() != PAGE_TEMPLATE)
+    if ((USER_UI_Core_GetViewMode() != UI_VIEW_PAGE) ||
+        (USER_UI_Core_GetCurrentPage() != PAGE_TEMPLATE))
     {
         return false;
     }
@@ -132,6 +195,7 @@ void USER_UI_Task(void)
     bool route_interaction_active;
     USER_UI_KeyEvent_t prev_event;
     USER_UI_KeyEvent_t next_event;
+    USER_UI_KeyEvent_t esc_event;
 
     ui_heartbeat_tick++;
     if (ui_heartbeat_tick >= USER_UI_HEARTBEAT_PERIOD_TICKS)
@@ -147,6 +211,16 @@ void USER_UI_Task(void)
         USER_UI_Core_DispatchRouteBusyButtons();
         USER_UI_Core_RedrawStaticIfNeeded();
         USER_UI_Core_DrawCurrentDynamic();
+        USER_OLED_Service();
+        return;
+    }
+
+    if (USER_UI_Core_GetViewMode() != UI_VIEW_PAGE)
+    {
+        USER_UI_Core_DispatchMenuButtons();
+        USER_UI_Core_RedrawStaticIfNeeded();
+        USER_UI_Core_DrawCurrentDynamic();
+        USER_OLED_Service();
         return;
     }
 
@@ -162,8 +236,19 @@ void USER_UI_Task(void)
         USER_UI_Core_GotoAdjacentPage(true);
     }
 
+    esc_event = USER_UI_ConsumeButtonEvent(ESC);
+    if (esc_event != USER_UI_KEY_EVENT_NONE)
+    {
+        USER_UI_Core_Back();
+        USER_UI_Core_RedrawStaticIfNeeded();
+        USER_UI_Core_DrawCurrentDynamic();
+        USER_OLED_Service();
+        return;
+    }
+
     USER_UI_Core_DispatchPageButtons();
 
     USER_UI_Core_RedrawStaticIfNeeded();
     USER_UI_Core_DrawCurrentDynamic();
+    USER_OLED_Service();
 }

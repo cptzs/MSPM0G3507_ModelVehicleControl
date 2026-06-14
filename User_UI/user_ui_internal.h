@@ -48,6 +48,14 @@ typedef enum
     USER_UI_KEY_EVENT_LONG_REPEAT
 } USER_UI_KeyEvent_t;
 
+typedef enum
+{
+    UI_VIEW_MAIN_MENU = 0,
+    UI_VIEW_SUB_MENU,
+    UI_VIEW_PAGE,
+    UI_VIEW_PLACEHOLDER
+} USER_UI_ViewMode_t;
+
 typedef void (*USER_UI_PageDrawFunc_t)(void);
 typedef void (*USER_UI_PageKeyFunc_t)(Button_t key, USER_UI_KeyEvent_t event);
 typedef void (*USER_UI_PageLifecycleFunc_t)(void);
@@ -83,9 +91,15 @@ bool USER_UI_ConsumeAndDispatchButton(DisplayPage_t page, Button_t button);
 
 /* ---- UI core state helpers ---- */
 DisplayPage_t USER_UI_Core_GetCurrentPage(void);
+USER_UI_ViewMode_t USER_UI_Core_GetViewMode(void);
 void USER_UI_Core_Reset(void);
 void USER_UI_Core_SetCurrentPage(DisplayPage_t page);
 void USER_UI_Core_GotoAdjacentPage(bool forward);
+void USER_UI_Core_MoveMainSelection(bool forward);
+void USER_UI_Core_MoveSubSelection(bool forward);
+void USER_UI_Core_OpenSelectedCategory(void);
+void USER_UI_Core_OpenSelectedItem(void);
+void USER_UI_Core_Back(void);
 bool USER_UI_Core_IsStaticDirty(void);
 void USER_UI_Core_MarkStaticDirty(void);
 void USER_UI_Core_ClearStaticDirty(void);
@@ -98,6 +112,7 @@ void USER_UI_Route_StartCharge(uint8_t route);
 void USER_UI_Route_CancelCharge(void);
 bool USER_UI_Route_IsBusy(void);
 bool USER_UI_Route_IsCharging(void);
+bool USER_UI_Route_IsWaitingRelease(void);
 bool USER_UI_Route_IsCountdown(void);
 uint8_t USER_UI_Route_GetPendingRoute(void);
 uint16_t USER_UI_Route_GetCountdownRemainMs(void);
@@ -122,6 +137,9 @@ void USER_UI_ShowGyroscopePageDynamic(void);
 void USER_UI_GyroscopeOnKey(Button_t key, USER_UI_KeyEvent_t event);
 void USER_UI_ShowActuatorPageStatic(void);
 void USER_UI_ShowActuatorPageDynamic(void);
+void USER_UI_ActuatorOnKey(Button_t key, USER_UI_KeyEvent_t event);
+void USER_UI_ActuatorOnEnter(void);
+void USER_UI_ActuatorOnExit(void);
 void USER_UI_ShowThreadsPageStatic(void);
 void USER_UI_ShowThreadsPageDynamic(void);
 void USER_UI_ThreadsOnKey(Button_t key, USER_UI_KeyEvent_t event);

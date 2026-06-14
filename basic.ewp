@@ -2743,6 +2743,12 @@
             </excluded>
         </file>
         <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_menu.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
             <name>$PROJ_DIR$\User_UI\user_ui_page_actuator.c</name>
             <excluded>
                 <configuration>Minimal_Bringup</configuration>
@@ -2774,6 +2780,12 @@
         </file>
         <file>
             <name>$PROJ_DIR$\User_UI\user_ui_page_route.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_route_map.c</name>
             <excluded>
                 <configuration>Minimal_Bringup</configuration>
             </excluded>

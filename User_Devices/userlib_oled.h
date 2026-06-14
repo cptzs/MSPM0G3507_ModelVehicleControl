@@ -76,6 +76,10 @@ OLED_Status_t USER_OLED_Init(void);
 /// @retval OLED_ERROR 反初始化失败
 OLED_Status_t USER_OLED_DeInit(void);
 
+/// @brief OLED固定帧率刷新服务，由UI任务周期调用
+/// @param None
+void USER_OLED_Service(void);
+
 /// @brief 清屏
 /// @param None
 void USER_OLED_CleanScreen(void);

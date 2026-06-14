@@ -7,7 +7,7 @@
  * ============================================================================
  * 本文件实现了基于 SPI + DMA 的 OLED 单色显示屏驱动，包含：
  *   - 硬件初始化 / 反初始化（SPI、DMA、GPIO）
- *   - 全屏 GRAM 缓冲区管理与 DMA 连续刷新
+ *   - 全屏 GRAM 缓冲区管理与 DMA 限帧刷新
  *   - 基础图形绘制：点、水平线、垂直线、任意斜线、虚线、矩形、圆、圆弧
  *   - 字符与数值格式化输出（字符串、十六进制、无符号/有符号整数、浮点数）
  *   - 进度条（Bar）与波形（Wave）辅助显示
@@ -17,7 +17,7 @@
  * 缓冲区策略
  * ============================================================================
  * GRAM[8][128] 是片内全帧缓冲区，MCU 所有绘制均在 GRAM 中完成。
- * SPI DMA 在后台持续将 GRAM 发送至 OLED，实现无撕裂刷新。
+ * USER_OLED_Service() 在 DMA 空闲且画面变脏时按固定周期将 GRAM 发送至 OLED。
  * 绘制函数仅修改 GRAM，不直接操作 OLED 硬件，因此可以批量更新后
  * 由 DMA 自动同步到屏幕，减少 SPI 阻塞等待。
  *
@@ -40,7 +40,7 @@
  * ============================================================================
  * - 调用任何绘制 API 前须先调用 USER_OLED_Init() 完成初始化。
  * - 所有绘制函数假定在非 ISR 上下文中调用；SPI ISR 仅负责 DMA 重传。
- * - 浮点输出依赖 math.h (isnan/isinf)，需链接数学库（-lm 或等效配置）。
+ * - 浮点输出仅做定点化格式转换，不依赖 math 库三角或分类函数。
  */
 
 /*===========================================================================
@@ -50,9 +50,8 @@
 #include "userlib_oled.h"
 #include "userlib_fonts.h"
 
+#include <float.h>
 #include <limits.h>
-#include <math.h>
-#include <stdlib.h>
 #include <string.h>
 
 /*===========================================================================
@@ -118,13 +117,102 @@
  * 全局缓冲区与状态变量
  *===========================================================================*/
 
+#define OLED_FRAME_BUFFER_SIZE (OLED_PAGE_COUNT * OLED_WIDTH)
+#define OLED_REFRESH_PERIOD_MS 10u
+#define OLED_PENDING_CONTRAST 0x01u
+#define OLED_PENDING_DISPLAY 0x02u
+#define OLED_PENDING_INVERT 0x04u
+
 uint8_t GRAM[OLED_PAGE_COUNT][OLED_WIDTH] = {0};
 uint8_t WaveRAM[OLED_WIDTH] = {0};
 uint8_t BarRAM[OLED_PAGE_COUNT] = {0};
 
 static char str_temp[22] = {0};
 static uint8_t isOLED_Initialized = 0u;
-static uint8_t isOLED_AtWork = 0u;
+static volatile uint8_t oled_dma_busy = 0u;
+static uint8_t oled_frame_dirty = 1u;
+static uint32_t oled_next_refresh_tick = 0u;
+static uint8_t oled_pending_commands = 0u;
+static uint8_t oled_pending_contrast = OLED_DEFAULT_BRIGHTNESS;
+static bool oled_pending_display_on = true;
+static bool oled_pending_invert = false;
+
+#define USER_OLED_MARK_DIRTY() \
+  do                            \
+  {                             \
+    oled_frame_dirty = 1u;      \
+  } while (0)
+
+#define USER_OLED_POINT_MASK(y_) ((uint8_t)(0x80u >> ((y_) & 0x07u)))
+#define USER_OLED_ROW_FROM_Y(y_) ((uint8_t)(7u - ((y_) >> 3)))
+
+#define USER_OLED_OR_BYTE(row_, x_, mask_)                         \
+  do                                                               \
+  {                                                                \
+    uint8_t *cell__ = &GRAM[(uint8_t)(row_)][(uint8_t)(x_)];       \
+    uint8_t value__ = (uint8_t)(*cell__ | (uint8_t)(mask_));       \
+    if (value__ != *cell__)                                        \
+    {                                                              \
+      *cell__ = value__;                                           \
+      USER_OLED_MARK_DIRTY();                                      \
+    }                                                              \
+  } while (0)
+
+#define USER_OLED_AND_BYTE(row_, x_, mask_)                        \
+  do                                                               \
+  {                                                                \
+    uint8_t *cell__ = &GRAM[(uint8_t)(row_)][(uint8_t)(x_)];       \
+    uint8_t value__ = (uint8_t)(*cell__ & (uint8_t)(mask_));       \
+    if (value__ != *cell__)                                        \
+    {                                                              \
+      *cell__ = value__;                                           \
+      USER_OLED_MARK_DIRTY();                                      \
+    }                                                              \
+  } while (0)
+
+#define USER_OLED_SET_POINT_FAST(x_, y_) \
+  USER_OLED_OR_BYTE(USER_OLED_ROW_FROM_Y(y_), (x_), USER_OLED_POINT_MASK(y_))
+
+#define USER_OLED_RESET_POINT_FAST(x_, y_) \
+  USER_OLED_AND_BYTE(USER_OLED_ROW_FROM_Y(y_), (x_), (uint8_t)(~USER_OLED_POINT_MASK(y_)))
+
+static inline void USER_OLED_SetByteIfChanged(uint8_t *dst, uint8_t value)
+{
+  if (*dst != value)
+  {
+    *dst = value;
+    USER_OLED_MARK_DIRTY();
+  }
+}
+
+static void USER_OLED_SetBytes(uint8_t *dst, uint8_t value, uint16_t len)
+{
+  while (len > 0u)
+  {
+    USER_OLED_SetByteIfChanged(dst, value);
+    dst++;
+    len--;
+  }
+}
+
+static inline void USER_OLED_CopyFont6(uint8_t *dst, const uint8_t *src)
+{
+  USER_OLED_SetByteIfChanged(&dst[0], src[0]);
+  USER_OLED_SetByteIfChanged(&dst[1], src[1]);
+  USER_OLED_SetByteIfChanged(&dst[2], src[2]);
+  USER_OLED_SetByteIfChanged(&dst[3], src[3]);
+  USER_OLED_SetByteIfChanged(&dst[4], src[4]);
+  USER_OLED_SetByteIfChanged(&dst[5], src[5]);
+}
+
+static uint16_t USER_OLED_NormalizeAngle(uint16_t angle)
+{
+  while (angle >= 360u)
+  {
+    angle = (uint16_t)(angle - 360u);
+  }
+  return angle;
+}
 
 /*===========================================================================
  * 内部辅助函数：硬件抽象层
@@ -166,7 +254,7 @@ static void __User_OLED_HW_DeInit(void)
  * @brief 设置 SPI 传输模式为数据（DC 引脚拉高）。
  *
  * @note OLED DC 引脚高电平表示接下来 SPI 发送的是显示数据（GRAM 内容），
- *       低电平表示发送的是命令。本函数在 DMA 连续刷新前调用。
+ *       低电平表示发送的是命令。本函数在 DMA 限帧刷新前调用。
  */
 static void __User_OLED_SetTxMode_Data(void)
 {
@@ -228,6 +316,20 @@ static void __User_OLED_SPI_Transmit_DMA(uint8_t *pdat, uint16_t size)
   DL_DMA_enableChannel(DMA, SPI1_DMA_CH);
 }
 
+static bool USER_OLED_TickReached(uint32_t now, uint32_t target)
+{
+  return ((int32_t)(now - target) >= 0);
+}
+
+static void USER_OLED_StartFrameTransfer(void)
+{
+  oled_frame_dirty = 0u;
+  oled_dma_busy = 1u;
+  __User_OLED_SetTxMode_Data();
+  __User_OLED_SPI_Transmit_DMA(&GRAM[0][0],
+                               OLED_FRAME_BUFFER_SIZE);
+}
+
 /**
  * @brief SPI 阻塞发送单个字节并延时等待。
  *
@@ -241,8 +343,11 @@ static void __User_OLED_SPI_Transmit_DMA(uint8_t *pdat, uint16_t size)
 static void __User_OLED_SPI_Transmit(uint8_t *pdat, uint16_t size, uint16_t timeout)
 {
   (void)size;
-  DL_SPI_transmitData8(SPI1_CH, *pdat);
-  __User_OLED_Delay(timeout);
+  (void)timeout;
+  DL_SPI_transmitDataBlocking8(SPI1_CH, *pdat);
+  while (DL_SPI_isBusy(SPI1_CH))
+  {
+  }
 }
 
 /**
@@ -256,6 +361,37 @@ static void __User_OLED_SPI_Transmit(uint8_t *pdat, uint16_t size, uint16_t time
 static void __User_OLED_Send(uint8_t data)
 {
   __User_OLED_SPI_Transmit(&data, 1u, 10u);
+}
+
+static void USER_OLED_ApplyPendingCommands(void)
+{
+  uint8_t pending = oled_pending_commands;
+
+  if (pending == 0u)
+  {
+    return;
+  }
+
+  oled_pending_commands = 0u;
+  __User_OLED_SetTxMode_Cmd();
+
+  if ((pending & OLED_PENDING_CONTRAST) != 0u)
+  {
+    __User_OLED_Send(OLED_cmd_SetContrast);
+    __User_OLED_Send(oled_pending_contrast);
+  }
+  if ((pending & OLED_PENDING_DISPLAY) != 0u)
+  {
+    __User_OLED_Send(oled_pending_display_on ? OLED_cmd_DisplayON
+                                             : OLED_cmd_DisplayOFF);
+  }
+  if ((pending & OLED_PENDING_INVERT) != 0u)
+  {
+    __User_OLED_Send(oled_pending_invert ? OLED_cmd_ReverseDisplay
+                                         : OLED_cmd_NormalDisplay);
+  }
+
+  __User_OLED_SetTxMode_Data();
 }
 
 /*===========================================================================
@@ -275,7 +411,7 @@ static void __User_OLED_Send(uint8_t data)
  */
 static inline uint8_t USER_OLED_MakePointMask(uint8_t y)
 {
-  return (uint8_t)(0x80u >> (y & 0x07u));
+  return USER_OLED_POINT_MASK(y);
 }
 
 /**
@@ -290,12 +426,8 @@ static inline uint8_t USER_OLED_MakePointMask(uint8_t y)
  */
 static inline uint8_t USER_OLED_MakeYMask(uint8_t bit_start, uint8_t bit_end)
 {
-  uint8_t mask = 0u;
-  for (uint8_t bit = bit_start; bit <= bit_end; bit++)
-  {
-    mask |= (uint8_t)(0x80u >> bit);
-  }
-  return mask;
+  return (uint8_t)(((uint8_t)(0xFFu >> bit_start)) &
+                   ((uint8_t)(0xFFu << (7u - bit_end))));
 }
 
 /**
@@ -309,7 +441,7 @@ static inline uint8_t USER_OLED_MakeYMask(uint8_t bit_start, uint8_t bit_end)
  */
 static inline void USER_OLED_SetPointFast(uint8_t x, uint8_t y)
 {
-  GRAM[7u - (y >> 3)][x] |= USER_OLED_MakePointMask(y);
+  USER_OLED_SET_POINT_FAST(x, y);
 }
 
 /**
@@ -322,7 +454,7 @@ static inline void USER_OLED_SetPointFast(uint8_t x, uint8_t y)
  */
 static inline void USER_OLED_ResetPointFast(uint8_t x, uint8_t y)
 {
-  GRAM[7u - (y >> 3)][x] &= (uint8_t)(~USER_OLED_MakePointMask(y));
+  USER_OLED_RESET_POINT_FAST(x, y);
 }
 
 /**
@@ -362,13 +494,19 @@ static inline void USER_OLED_DrawHLineFast(uint8_t x1, uint8_t x2, uint8_t y)
 {
   const uint8_t row = (uint8_t)(7u - (y >> 3));
   const uint8_t mask = USER_OLED_MakePointMask(y);
-  for (uint8_t x = x1; x <= x2; x++)
+  uint8_t *dst = &GRAM[row][x1];
+  uint8_t count = (uint8_t)(x2 - x1 + 1u);
+
+  while (count > 0u)
   {
-    GRAM[row][x] |= mask;
-    if (x == x2)
+    const uint8_t value = (uint8_t)(*dst | mask);
+    if (value != *dst)
     {
-      break;
+      *dst = value;
+      USER_OLED_MARK_DIRTY();
     }
+    dst++;
+    count--;
   }
 }
 
@@ -429,7 +567,7 @@ static inline void USER_OLED_DrawVLineFast(uint8_t x, uint8_t y1, uint8_t y2)
     const uint8_t bit_start = (page == page_start) ? (uint8_t)(y1 & 0x07u) : 0u;
     const uint8_t bit_end = (page == page_end) ? (uint8_t)(y2 & 0x07u) : 7u;
     const uint8_t row = (uint8_t)(7u - page);
-    GRAM[row][x] |= USER_OLED_MakeYMask(bit_start, bit_end);
+    USER_OLED_OR_BYTE(row, x, USER_OLED_MakeYMask(bit_start, bit_end));
   }
 }
 
@@ -459,13 +597,13 @@ static inline void USER_OLED_FillRectFast(uint8_t x1, uint8_t y1, uint8_t x2, ui
 
     if (mask == 0xFFu)
     {
-      memset(&GRAM[row][x1], 0xFF, width);
+      USER_OLED_SetBytes(&GRAM[row][x1], 0xFF, width);
     }
     else
     {
       for (uint16_t i = 0u; i < width; i++)
       {
-        GRAM[row][x1 + i] |= mask;
+        USER_OLED_OR_BYTE(row, (uint8_t)(x1 + i), mask);
       }
     }
   }
@@ -479,7 +617,7 @@ static inline void USER_OLED_FillRectFast(uint8_t x1, uint8_t y1, uint8_t x2, ui
  *   2. 硬件复位序列（NRST 引脚）
  *   3. 发送 SSD1306 初始化命令序列（charge pump、对比度、扫描方向等）
  *   4. 清空 GRAM / WaveRAM 缓冲区
- *   5. 开启显示并启动 DMA 连续刷新
+ *   5. 开启显示并启动 DMA 限帧刷新
  *===========================================================================*/
 /**
  * @brief OLED 初始化：硬件配置 → 复位 → SSD1306 命令序列 → 清屏 → DMA 刷新。
@@ -493,7 +631,7 @@ static inline void USER_OLED_FillRectFast(uint8_t x1, uint8_t y1, uint8_t x2, ui
  *       2. NRST 引脚 H→L→H 硬件复位（10ms / 10ms / 200ms 延时）；
  *       3. 发送 SSD1306 初始化命令（电荷泵、对比度、扫描方向、时钟等）；
  *       4. 清零 GRAM / WaveRAM 缓冲区；
- *       5. 开启显示并启动 1024 字节 DMA 连续刷新。
+ *       5. 开启显示并启动 1024 字节 DMA 限帧刷新。
  *
  * @warning 本函数不可重入，重复调用返回 OLED_ERROR_INIT。
  */
@@ -564,15 +702,19 @@ OLED_Status_t USER_OLED_Init(void)
 
   /*--- 步骤4: 清空缓冲区 ---*/
   isOLED_Initialized = 1u;
-  USER_OLED_CleanScreen();
+  memset(&GRAM[0][0], 0x00, OLED_FRAME_BUFFER_SIZE);
+  memset(WaveRAM, 0x00, sizeof(WaveRAM));
+  memset(BarRAM, 0xFF, sizeof(BarRAM));
+  oled_pending_commands = 0u;
+  oled_frame_dirty = 1u;
 
-  /*--- 步骤5: 开启显示并启动 DMA 连续刷新 ---*/
+  /*--- 步骤5: 开启显示并启动 DMA 限帧刷新 ---*/
   __User_OLED_SetTxMode_Cmd();
   __User_OLED_Send(OLED_cmd_DisplayON);
   __User_OLED_Delay(10u);
-  __User_OLED_SetTxMode_Data();
-  __User_OLED_SPI_Transmit_DMA(&GRAM[0][0], 1024u); /* 首次 DMA 传输 128×64/8 = 1024 字节 */
-  isOLED_AtWork = 1u;
+  oled_dma_busy = 0u;
+  oled_next_refresh_tick = sysTick;
+  USER_OLED_Service();
   return OLED_OK;
 }
 
@@ -587,7 +729,7 @@ OLED_Status_t USER_OLED_Init(void)
  * @retval OLED_OK         反初始化成功。
  * @retval OLED_ERROR_INIT 尚未初始化，无需反初始化。
  *
- * @note 调用后 isOLED_AtWork 清零，SPI ISR 不再触发新一轮 DMA。
+ * @note 调用后停止新的帧传输请求，当前 DMA 状态被清除。
  *       当前不关闭 SPI 外设时钟（__User_OLED_HW_DeInit 预留）。
  */
 OLED_Status_t USER_OLED_DeInit(void)
@@ -597,9 +739,44 @@ OLED_Status_t USER_OLED_DeInit(void)
     return OLED_ERROR_INIT;
   }
   __User_OLED_HW_DeInit();
-  isOLED_AtWork = 0u;
+  if (DL_DMA_isChannelEnabled(DMA, SPI1_DMA_CH))
+  {
+    DL_DMA_disableChannel(DMA, SPI1_DMA_CH);
+  }
+  oled_dma_busy = 0u;
+  oled_frame_dirty = 0u;
   isOLED_Initialized = 0u;
   return OLED_OK;
+}
+
+void USER_OLED_Service(void)
+{
+  uint32_t now;
+
+  if (!isOLED_Initialized || oled_dma_busy)
+  {
+    return;
+  }
+
+  USER_OLED_ApplyPendingCommands();
+
+  now = sysTick;
+  if (!USER_OLED_TickReached(now, oled_next_refresh_tick))
+  {
+    return;
+  }
+
+  do
+  {
+    oled_next_refresh_tick += OLED_REFRESH_PERIOD_MS;
+  } while (USER_OLED_TickReached(now, oled_next_refresh_tick));
+
+  if (oled_frame_dirty == 0u)
+  {
+    return;
+  }
+
+  USER_OLED_StartFrameTransfer();
 }
 
 /*===========================================================================
@@ -614,8 +791,10 @@ OLED_Status_t USER_OLED_DeInit(void)
  */
 void USER_OLED_CleanScreen(void)
 {
-  memset(&GRAM[0][0], 0x00, sizeof(GRAM));
+  memset(&GRAM[0][0], 0x00, OLED_FRAME_BUFFER_SIZE);
   memset(WaveRAM, 0x00, sizeof(WaveRAM));
+  memset(BarRAM, 0xFF, sizeof(BarRAM));
+  USER_OLED_MARK_DIRTY();
 }
 
 /**
@@ -629,7 +808,8 @@ void USER_OLED_CleanRow(uint8_t row)
 {
   if (row < OLED_PAGE_COUNT)
   {
-    memset(&GRAM[row][0], 0x00, OLED_WIDTH);
+    USER_OLED_SetBytes(&GRAM[row][0], 0x00, OLED_WIDTH);
+    BarRAM[row] = 0xFFu;
   }
 }
 
@@ -654,23 +834,31 @@ void USER_OLED_CleanRow(uint8_t row)
  */
 void USER_OLED_putString(uint8_t row, uint8_t column, const char *str, uint8_t length)
 {
+  uint8_t remaining_chars;
+  uint8_t x;
+
   if ((row >= OLED_PAGE_COUNT) || (column >= OLED_CHARS_PER_ROW) || (str == NULL) || (length == 0u))
   {
     return;
   }
 
-  uint8_t x = (uint8_t)(column * OLED_CHAR_WIDTH);
-  const uint8_t x_end = (uint8_t)((x + (uint16_t)length * OLED_CHAR_WIDTH > OLED_WIDTH) ? OLED_WIDTH : x + length * OLED_CHAR_WIDTH);
+  x = (uint8_t)((column << 2) + (column << 1));
+  remaining_chars = (uint8_t)(OLED_CHARS_PER_ROW - column);
+  if (length < remaining_chars)
+  {
+    remaining_chars = length;
+  }
 
-  while ((x < x_end) && (*str != '\0'))
+  while ((remaining_chars > 0u) && (*str != '\0'))
   {
     uint8_t index = (uint8_t)(*str++);
     if (index >= USER_FONT_ASCII_6X8_COUNT)
     {
       index = 32u;
     }
-    memcpy(&GRAM[row][x], FontLib[index], OLED_CHAR_WIDTH);
+    USER_OLED_CopyFont6(&GRAM[row][x], FontLib[index]);
     x = (uint8_t)(x + OLED_CHAR_WIDTH);
+    remaining_chars--;
   }
 }
 
@@ -681,20 +869,29 @@ void USER_OLED_putString(uint8_t row, uint8_t column, const char *str, uint8_t l
  * @param column 字符列（0~20），越界则忽略。
  * @param ch     要显示的 ASCII 字符。
  *
- * @note 越界字符回退显示空格，直接 memcpy 6 字节字模到 GRAM。
+ * @note 越界字符回退显示空格，仅在字模字节变化时写入 GRAM。
  */
 void USER_OLED_putChar(uint8_t row, uint8_t column, char ch)
 {
+  uint8_t x;
+
   if ((row >= OLED_PAGE_COUNT) || (column >= OLED_CHARS_PER_ROW))
   {
     return;
   }
+
+  x = (uint8_t)((column << 2) + (column << 1));
+  if (((uint16_t)x + OLED_CHAR_WIDTH) > OLED_WIDTH)
+  {
+    return;
+  }
+
   uint8_t index = (uint8_t)ch;
   if (index >= USER_FONT_ASCII_6X8_COUNT)
   {
     index = 32u;
   }
-  memcpy(&GRAM[row][column * OLED_CHAR_WIDTH], FontLib[index], OLED_CHAR_WIDTH);
+  USER_OLED_CopyFont6(&GRAM[row][x], FontLib[index]);
 }
 
 /*===========================================================================
@@ -727,38 +924,119 @@ static bool USER_OLED_U16ToStr(uint16_t num, uint8_t radix, uint8_t *str, uint8_
   }
 
   static const char hex_chars[] = "0123456789ABCDEF";
-  uint8_t rev[17];
-  uint8_t count = 0u;
+  uint8_t digits = 1u;
+  uint8_t pos = 0u;
 
-  do
+  if (radix == 10u)
   {
-    if (radix == 10u)
-    {
-      rev[count++] = (uint8_t)('0' + (num % 10u));
-      num = (uint16_t)(num / 10u);
-    }
-    else
-    {
-      uint8_t shift = (radix == 16u) ? 4u : 1u;
-      rev[count++] = (uint8_t)hex_chars[num & (radix - 1u)];
-      num = (uint16_t)(num >> shift);
-    }
-  } while ((num != 0u) && (count < sizeof(rev)));
+    static const uint16_t dec_place[] = {10000u, 1000u, 100u, 10u, 1u};
+    uint8_t place_index = 4u;
 
-  if (count > len)
+    if (num >= 10000u)
+    {
+      digits = 5u;
+      place_index = 0u;
+    }
+    else if (num >= 1000u)
+    {
+      digits = 4u;
+      place_index = 1u;
+    }
+    else if (num >= 100u)
+    {
+      digits = 3u;
+      place_index = 2u;
+    }
+    else if (num >= 10u)
+    {
+      digits = 2u;
+      place_index = 3u;
+    }
+
+    if (digits > len)
+    {
+      return false;
+    }
+
+    while (pos < (uint8_t)(len - digits))
+    {
+      str[pos++] = (uint8_t)fill;
+    }
+
+    while (place_index < (uint8_t)(sizeof(dec_place) / sizeof(dec_place[0])))
+    {
+      uint8_t digit = 0u;
+      const uint16_t place = dec_place[place_index++];
+      while (num >= place)
+      {
+        num = (uint16_t)(num - place);
+        digit++;
+      }
+      str[pos++] = (uint8_t)('0' + digit);
+    }
+
+    str[len] = '\0';
+    return true;
+  }
+
+  if (radix == 16u)
+  {
+    if (num > 0x0FFFu) { digits = 4u; }
+    else if (num > 0x00FFu) { digits = 3u; }
+    else if (num > 0x000Fu) { digits = 2u; }
+
+    if (digits > len)
+    {
+      return false;
+    }
+
+    while (pos < (uint8_t)(len - digits))
+    {
+      str[pos++] = (uint8_t)fill;
+    }
+
+    while (digits > 0u)
+    {
+      digits--;
+      str[pos++] = (uint8_t)hex_chars[(num >> (uint8_t)(digits << 2)) & 0x0Fu];
+    }
+
+    str[len] = '\0';
+    return true;
+  }
+
+  if (num >= 0x8000u) { digits = 16u; }
+  else if (num >= 0x4000u) { digits = 15u; }
+  else if (num >= 0x2000u) { digits = 14u; }
+  else if (num >= 0x1000u) { digits = 13u; }
+  else if (num >= 0x0800u) { digits = 12u; }
+  else if (num >= 0x0400u) { digits = 11u; }
+  else if (num >= 0x0200u) { digits = 10u; }
+  else if (num >= 0x0100u) { digits = 9u; }
+  else if (num >= 0x0080u) { digits = 8u; }
+  else if (num >= 0x0040u) { digits = 7u; }
+  else if (num >= 0x0020u) { digits = 6u; }
+  else if (num >= 0x0010u) { digits = 5u; }
+  else if (num >= 0x0008u) { digits = 4u; }
+  else if (num >= 0x0004u) { digits = 3u; }
+  else if (num >= 0x0002u) { digits = 2u; }
+
+  if (digits > len)
   {
     return false;
   }
 
-  uint8_t pos = 0u;
-  while (pos < (uint8_t)(len - count))
+  while (pos < (uint8_t)(len - digits))
   {
     str[pos++] = (uint8_t)fill;
   }
-  for (uint8_t i = 0u; i < count; i++)
+
+  while (digits > 0u)
   {
-    str[pos++] = rev[count - 1u - i];
+    digits--;
+    str[pos++] = ((num & (uint16_t)(1u << digits)) != 0u) ? (uint8_t)'1' : (uint8_t)'0';
   }
+
   str[len] = '\0';
   return true;
 }
@@ -850,24 +1128,32 @@ void USER_OLED_putI16(uint8_t row, uint8_t column, int16_t number, uint8_t lengt
  */
 void USER_OLED_putFloat(uint8_t row, uint8_t column, float number, uint8_t int_length, uint8_t float_length)
 {
+  static const uint16_t pow10[] = {1u, 10u, 100u, 1000u, 10000u};
+  uint16_t scale;
+  uint16_t int_part;
+  uint16_t frac_int;
+  uint8_t int_digits;
+  uint8_t pos = 0u;
+  bool negative = false;
+  char temp[16] = {0};
+  char int_str[8] = {0};
+  char frac_str[8] = {0};
+
   if ((int_length == 0u) || (int_length > 6u) || (float_length == 0u) || (float_length > 4u))
   {
     return;
   }
-  if (isnan(number))
+  if (number != number)
   {
     USER_OLED_putString(row, column, "NaN", 3u);
     return;
   }
-  if (isinf(number))
+  if ((number > FLT_MAX) || (number < -FLT_MAX))
   {
     USER_OLED_putString(row, column, number > 0.0f ? "Inf" : "-Inf", number > 0.0f ? 3u : 4u);
     return;
   }
 
-  char temp[16] = {0};
-  uint8_t pos = 0u;
-  bool negative = false;
   if (number < 0.0f)
   {
     if (int_length < 2u)
@@ -879,19 +1165,16 @@ void USER_OLED_putFloat(uint8_t row, uint8_t column, float number, uint8_t int_l
     temp[pos++] = '-';
   }
 
-  static const uint16_t pow10[] = {1u, 10u, 100u, 1000u, 10000u};
-  uint16_t int_part = (uint16_t)number;
-  float frac = number - (float)int_part;
-  frac += 0.5f / (float)pow10[float_length];
-  if (frac >= 1.0f)
+  scale = pow10[float_length];
+  int_part = (uint16_t)number;
+  frac_int = (uint16_t)(((number - (float)int_part) * (float)scale) + 0.5f);
+  if (frac_int >= scale)
   {
     int_part++;
-    frac -= 1.0f;
+    frac_int = (uint16_t)(frac_int - scale);
   }
 
-  uint8_t int_digits = negative ? (uint8_t)(int_length - 1u) : int_length;
-  char int_str[8] = {0};
-  char frac_str[8] = {0};
+  int_digits = negative ? (uint8_t)(int_length - 1u) : int_length;
   if (!USER_OLED_U16ToStr(int_part, 10u, (uint8_t *)int_str, int_digits, ' '))
   {
     return;
@@ -902,11 +1185,6 @@ void USER_OLED_putFloat(uint8_t row, uint8_t column, float number, uint8_t int_l
   }
   temp[pos++] = '.';
 
-  uint16_t frac_int = (uint16_t)(frac * (float)pow10[float_length]);
-  if (frac_int >= pow10[float_length])
-  {
-    frac_int = (uint16_t)(pow10[float_length] - 1u);
-  }
   if (!USER_OLED_U16ToStr(frac_int, 10u, (uint8_t *)frac_str, float_length, '0'))
   {
     return;
@@ -1036,17 +1314,29 @@ void USER_OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2)
   }
   if (y1 == y2)
   {
-    USER_OLED_DrawHLine(x1, x2, y1);
+    if (x1 > x2)
+    {
+      uint8_t temp = x1;
+      x1 = x2;
+      x2 = temp;
+    }
+    USER_OLED_DrawHLineFast(x1, x2, y1);
     return;
   }
   if (x1 == x2)
   {
-    USER_OLED_DrawVLine(x1, y1, y2);
+    if (y1 > y2)
+    {
+      uint8_t temp = y1;
+      y1 = y2;
+      y2 = temp;
+    }
+    USER_OLED_DrawVLineFast(x1, y1, y2);
     return;
   }
 
-  int16_t dx = abs((int16_t)x2 - (int16_t)x1);
-  int16_t dy = abs((int16_t)y2 - (int16_t)y1);
+  int16_t dx = (x2 >= x1) ? (int16_t)(x2 - x1) : (int16_t)(x1 - x2);
+  int16_t dy = (y2 >= y1) ? (int16_t)(y2 - y1) : (int16_t)(y1 - y2);
   int16_t sx = (x1 < x2) ? 1 : -1;
   int16_t sy = (y1 < y2) ? 1 : -1;
   int16_t err = dx - dy;
@@ -1060,7 +1350,7 @@ void USER_OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2)
     {
       break;
     }
-    int16_t e2 = (int16_t)(2 * err);
+    int16_t e2 = (int16_t)(err + err);
     if (e2 > -dy)
     {
       err -= dy;
@@ -1084,7 +1374,7 @@ void USER_OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2)
  * @param dash_length 每段实线像素数，为 0 则忽略。
  * @param gap_length  每段间隙像素数，为 0 则忽略。
  *
- * @note 使用 count % (dash_length + gap_length) 判断当前像素属于实线还是间隙。
+ * @note 使用段剩余计数在实线和间隙之间切换，避免逐像素取模。
  */
 void USER_OLED_DrawDashedLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, uint8_t dash_length, uint8_t gap_length)
 {
@@ -1093,19 +1383,19 @@ void USER_OLED_DrawDashedLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, ui
     return;
   }
 
-  int16_t dx = abs((int16_t)x2 - (int16_t)x1);
-  int16_t dy = abs((int16_t)y2 - (int16_t)y1);
+  int16_t dx = (x2 >= x1) ? (int16_t)(x2 - x1) : (int16_t)(x1 - x2);
+  int16_t dy = (y2 >= y1) ? (int16_t)(y2 - y1) : (int16_t)(y1 - y2);
   int16_t sx = (x1 < x2) ? 1 : -1;
   int16_t sy = (y1 < y2) ? 1 : -1;
   int16_t err = dx - dy;
   int16_t x = x1;
   int16_t y = y1;
-  uint8_t count = 0u;
-  uint8_t pattern = (uint8_t)(dash_length + gap_length);
+  uint8_t segment_remaining = dash_length;
+  bool drawing = true;
 
   while (1)
   {
-    if ((count % pattern) < dash_length)
+    if (drawing)
     {
       USER_OLED_SetPointFast((uint8_t)x, (uint8_t)y);
     }
@@ -1113,7 +1403,7 @@ void USER_OLED_DrawDashedLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, ui
     {
       break;
     }
-    int16_t e2 = (int16_t)(2 * err);
+    int16_t e2 = (int16_t)(err + err);
     if (e2 > -dy)
     {
       err -= dy;
@@ -1124,7 +1414,12 @@ void USER_OLED_DrawDashedLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, ui
       err += dx;
       y += sy;
     }
-    count++;
+    segment_remaining--;
+    if (segment_remaining == 0u)
+    {
+      drawing = !drawing;
+      segment_remaining = drawing ? dash_length : gap_length;
+    }
   }
 }
 
@@ -1132,7 +1427,7 @@ void USER_OLED_DrawDashedLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, ui
  * 几何图形：矩形 / 圆 / 圆弧
  *
  * 矩形支持填充与非填充模式。圆使用中点画圆算法。
- * 圆弧通过 atan2 角度判断在指定角度区间内的像素。
+ * 圆弧通过 Q7 角度向量和叉积判断指定角度区间内的像素。
  *===========================================================================*/
 
 /**
@@ -1170,6 +1465,14 @@ void USER_OLED_DrawRect(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, bool fil
   {
     USER_OLED_FillRectFast(x1, y1, x2, y2);
   }
+  else if (y1 == y2)
+  {
+    USER_OLED_DrawHLineFast(x1, x2, y1);
+  }
+  else if (x1 == x2)
+  {
+    USER_OLED_DrawVLineFast(x1, y1, y2);
+  }
   else
   {
     USER_OLED_DrawHLineFast(x1, x2, y1);
@@ -1192,10 +1495,17 @@ void USER_OLED_DrawRect(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, bool fil
  */
 void USER_OLED_DrawCircle(uint8_t x0, uint8_t y0, uint8_t radius, bool fill)
 {
+  bool fully_inside;
+
   if ((x0 >= OLED_WIDTH) || (y0 >= OLED_HEIGHT) || (radius == 0u))
   {
     return;
   }
+
+  fully_inside = ((uint16_t)x0 >= radius) &&
+                 ((uint16_t)y0 >= radius) &&
+                 (((uint16_t)x0 + radius) < OLED_WIDTH) &&
+                 (((uint16_t)y0 + radius) < OLED_HEIGHT);
 
   int16_t x = radius;
   int16_t y = 0;
@@ -1204,10 +1514,31 @@ void USER_OLED_DrawCircle(uint8_t x0, uint8_t y0, uint8_t radius, bool fill)
   {
     if (fill)
     {
-      USER_OLED_DrawHLineClipped((int16_t)x0 - x, (int16_t)x0 + x, (int16_t)y0 + y);
-      USER_OLED_DrawHLineClipped((int16_t)x0 - x, (int16_t)x0 + x, (int16_t)y0 - y);
-      USER_OLED_DrawHLineClipped((int16_t)x0 - y, (int16_t)x0 + y, (int16_t)y0 + x);
-      USER_OLED_DrawHLineClipped((int16_t)x0 - y, (int16_t)x0 + y, (int16_t)y0 - x);
+      if (fully_inside)
+      {
+        USER_OLED_DrawHLineFast((uint8_t)((int16_t)x0 - x), (uint8_t)((int16_t)x0 + x), (uint8_t)((int16_t)y0 + y));
+        USER_OLED_DrawHLineFast((uint8_t)((int16_t)x0 - x), (uint8_t)((int16_t)x0 + x), (uint8_t)((int16_t)y0 - y));
+        USER_OLED_DrawHLineFast((uint8_t)((int16_t)x0 - y), (uint8_t)((int16_t)x0 + y), (uint8_t)((int16_t)y0 + x));
+        USER_OLED_DrawHLineFast((uint8_t)((int16_t)x0 - y), (uint8_t)((int16_t)x0 + y), (uint8_t)((int16_t)y0 - x));
+      }
+      else
+      {
+        USER_OLED_DrawHLineClipped((int16_t)x0 - x, (int16_t)x0 + x, (int16_t)y0 + y);
+        USER_OLED_DrawHLineClipped((int16_t)x0 - x, (int16_t)x0 + x, (int16_t)y0 - y);
+        USER_OLED_DrawHLineClipped((int16_t)x0 - y, (int16_t)x0 + y, (int16_t)y0 + x);
+        USER_OLED_DrawHLineClipped((int16_t)x0 - y, (int16_t)x0 + y, (int16_t)y0 - x);
+      }
+    }
+    else if (fully_inside)
+    {
+      USER_OLED_SetPointFast((uint8_t)((int16_t)x0 + x), (uint8_t)((int16_t)y0 + y));
+      USER_OLED_SetPointFast((uint8_t)((int16_t)x0 - x), (uint8_t)((int16_t)y0 + y));
+      USER_OLED_SetPointFast((uint8_t)((int16_t)x0 + x), (uint8_t)((int16_t)y0 - y));
+      USER_OLED_SetPointFast((uint8_t)((int16_t)x0 - x), (uint8_t)((int16_t)y0 - y));
+      USER_OLED_SetPointFast((uint8_t)((int16_t)x0 + y), (uint8_t)((int16_t)y0 + x));
+      USER_OLED_SetPointFast((uint8_t)((int16_t)x0 - y), (uint8_t)((int16_t)y0 + x));
+      USER_OLED_SetPointFast((uint8_t)((int16_t)x0 + y), (uint8_t)((int16_t)y0 - x));
+      USER_OLED_SetPointFast((uint8_t)((int16_t)x0 - y), (uint8_t)((int16_t)y0 - x));
     }
     else
     {
@@ -1224,12 +1555,12 @@ void USER_OLED_DrawCircle(uint8_t x0, uint8_t y0, uint8_t radius, bool fill)
     if (err <= 0)
     {
       y++;
-      err += (int16_t)(2 * y + 1);
+      err += (int16_t)(y + y + 1);
     }
     if (err > 0)
     {
       x--;
-      err -= (int16_t)(2 * x + 1);
+      err -= (int16_t)(x + x + 1);
     }
   }
 }
@@ -1247,17 +1578,77 @@ void USER_OLED_DrawCircle(uint8_t x0, uint8_t y0, uint8_t radius, bool fill)
  * @note 当 start_angle > end_angle 时表示区间跨越 0° 边界
  *       （例如 start=350°, end=10°），此时采用 OR 逻辑判断。
  */
-static bool USER_OLED_IsAngleInRange(uint16_t angle, uint16_t start_angle, uint16_t end_angle)
+static const int8_t USER_OLED_SinQ7_0_90[91] = {
+    0, 2, 4, 7, 9, 11, 13, 15, 18, 20, 22, 24, 26,
+    29, 31, 33, 35, 37, 39, 41, 43, 46, 48, 50, 52, 54,
+    56, 58, 60, 62, 63, 65, 67, 69, 71, 73, 75, 76, 78,
+    80, 82, 83, 85, 87, 88, 90, 91, 93, 94, 96, 97, 99,
+    100, 101, 103, 104, 105, 107, 108, 109, 110, 111, 112, 113, 114,
+    115, 116, 117, 118, 119, 119, 120, 121, 121, 122, 123, 123, 124,
+    124, 125, 125, 125, 126, 126, 126, 127, 127, 127, 127, 127, 127};
+
+static void USER_OLED_AngleVectorQ7(uint16_t angle, int16_t *cos_q7, int16_t *sin_q7)
 {
-  if (start_angle <= end_angle)
+  angle = USER_OLED_NormalizeAngle(angle);
+
+  if (angle <= 90u)
   {
-    return (angle >= start_angle) && (angle <= end_angle);
+    *cos_q7 = USER_OLED_SinQ7_0_90[90u - angle];
+    *sin_q7 = USER_OLED_SinQ7_0_90[angle];
   }
-  return (angle >= start_angle) || (angle <= end_angle);
+  else if (angle <= 180u)
+  {
+    *cos_q7 = (int16_t)(-USER_OLED_SinQ7_0_90[angle - 90u]);
+    *sin_q7 = USER_OLED_SinQ7_0_90[180u - angle];
+  }
+  else if (angle <= 270u)
+  {
+    *cos_q7 = (int16_t)(-USER_OLED_SinQ7_0_90[270u - angle]);
+    *sin_q7 = (int16_t)(-USER_OLED_SinQ7_0_90[angle - 180u]);
+  }
+  else
+  {
+    *cos_q7 = USER_OLED_SinQ7_0_90[angle - 270u];
+    *sin_q7 = (int16_t)(-USER_OLED_SinQ7_0_90[360u - angle]);
+  }
+}
+
+static inline int32_t USER_OLED_CrossI16(int16_t ax, int16_t ay, int16_t bx, int16_t by)
+{
+  return ((int32_t)ax * (int32_t)by) - ((int32_t)ay * (int32_t)bx);
+}
+
+static inline int32_t USER_OLED_DotI16(int16_t ax, int16_t ay, int16_t bx, int16_t by)
+{
+  return ((int32_t)ax * (int32_t)bx) + ((int32_t)ay * (int32_t)by);
+}
+
+static bool USER_OLED_VectorInAngleRange(int16_t vx,
+                                         int16_t vy,
+                                         int16_t start_x,
+                                         int16_t start_y,
+                                         int16_t end_x,
+                                         int16_t end_y,
+                                         uint16_t span)
+{
+  if (span == 0u)
+  {
+    return (USER_OLED_CrossI16(start_x, start_y, vx, vy) == 0) &&
+           (USER_OLED_DotI16(start_x, start_y, vx, vy) >= 0);
+  }
+
+  if (span <= 180u)
+  {
+    return (USER_OLED_CrossI16(start_x, start_y, vx, vy) >= 0) &&
+           (USER_OLED_CrossI16(vx, vy, end_x, end_y) >= 0);
+  }
+
+  return !((USER_OLED_CrossI16(end_x, end_y, vx, vy) > 0) &&
+           (USER_OLED_CrossI16(vx, vy, start_x, start_y) > 0));
 }
 
 /**
- * @brief 绘制圆弧（公开 API，中点画圆 + atan2 角度过滤）。
+ * @brief 绘制圆弧（公开 API，中点画圆 + 整数角度过滤）。
  *
  * @param x0          圆心 X 坐标（0~127），越界则忽略。
  * @param y0          圆心 Y 坐标（0~63），越界则忽略。
@@ -1266,53 +1657,69 @@ static bool USER_OLED_IsAngleInRange(uint16_t angle, uint16_t start_angle, uint1
  * @param end_angle   结束角度（0~359 度，0° = 右，逆时针增加）。
  *
  * @note 角度自动对 360 取模，支持跨 0° 边界的区间（如 350°~10°）。
- *       每像素通过 atan2 计算角度后判断是否在 [start, end] 内。
+ *       每像素通过整数向量叉积判断是否在 [start, end] 内。
  */
 void USER_OLED_DrawArc(uint8_t x0, uint8_t y0, uint8_t radius, uint16_t start_angle, uint16_t end_angle)
 {
+  int16_t start_x;
+  int16_t start_y;
+  int16_t end_x;
+  int16_t end_y;
+  uint16_t span;
+
   if ((x0 >= OLED_WIDTH) || (y0 >= OLED_HEIGHT) || (radius == 0u))
   {
     return;
   }
-  start_angle %= 360u;
-  end_angle %= 360u;
+
+  start_angle = USER_OLED_NormalizeAngle(start_angle);
+  end_angle = USER_OLED_NormalizeAngle(end_angle);
+  span = (end_angle >= start_angle)
+             ? (uint16_t)(end_angle - start_angle)
+             : (uint16_t)(360u - start_angle + end_angle);
+  USER_OLED_AngleVectorQ7(start_angle, &start_x, &start_y);
+  USER_OLED_AngleVectorQ7(end_angle, &end_x, &end_y);
 
   int16_t x = radius;
   int16_t y = 0;
   int16_t err = 0;
   while (x >= y)
   {
-    const int16_t px[8] = {x, -x, x, -x, y, -y, y, -y};
-    const int16_t py[8] = {y, y, -y, -y, x, x, -x, -x};
+#define USER_OLED_TRY_ARC_POINT(dx_, dy_)                                                     \
+    do                                                                                         \
+    {                                                                                          \
+      const int16_t dx__ = (int16_t)(dx_);                                                     \
+      const int16_t dy__ = (int16_t)(dy_);                                                     \
+      const int16_t draw_x__ = (int16_t)((int16_t)x0 + dx__);                                  \
+      const int16_t draw_y__ = (int16_t)((int16_t)y0 + dy__);                                  \
+      if ((draw_x__ >= 0) && (draw_x__ < (int16_t)OLED_WIDTH) &&                               \
+          (draw_y__ >= 0) && (draw_y__ < (int16_t)OLED_HEIGHT) &&                              \
+          USER_OLED_VectorInAngleRange(dx__, (int16_t)(-dy__), start_x, start_y, end_x, end_y, span)) \
+      {                                                                                        \
+        USER_OLED_SetPointFast((uint8_t)draw_x__, (uint8_t)draw_y__);                          \
+      }                                                                                        \
+    } while (0)
 
-    for (uint8_t i = 0u; i < 8u; i++)
-    {
-      int16_t draw_x = (int16_t)x0 + px[i];
-      int16_t draw_y = (int16_t)y0 + py[i];
-      if ((draw_x >= 0) && (draw_x < (int16_t)OLED_WIDTH) && (draw_y >= 0) && (draw_y < (int16_t)OLED_HEIGHT))
-      {
-        double angle_d = atan2(-(double)py[i], (double)px[i]) * 180.0 / 3.14159265359;
-        if (angle_d < 0.0)
-        {
-          angle_d += 360.0;
-        }
-        uint16_t angle = (uint16_t)angle_d % 360u;
-        if (USER_OLED_IsAngleInRange(angle, start_angle, end_angle))
-        {
-          USER_OLED_SetPointFast((uint8_t)draw_x, (uint8_t)draw_y);
-        }
-      }
-    }
+    USER_OLED_TRY_ARC_POINT(x, y);
+    USER_OLED_TRY_ARC_POINT(-x, y);
+    USER_OLED_TRY_ARC_POINT(x, -y);
+    USER_OLED_TRY_ARC_POINT(-x, -y);
+    USER_OLED_TRY_ARC_POINT(y, x);
+    USER_OLED_TRY_ARC_POINT(-y, x);
+    USER_OLED_TRY_ARC_POINT(y, -x);
+    USER_OLED_TRY_ARC_POINT(-y, -x);
+
+#undef USER_OLED_TRY_ARC_POINT
 
     if (err <= 0)
     {
       y++;
-      err += (int16_t)(2 * y + 1);
+      err += (int16_t)(y + y + 1);
     }
     if (err > 0)
     {
       x--;
-      err -= (int16_t)(2 * x + 1);
+      err -= (int16_t)(x + x + 1);
     }
   }
 }
@@ -1326,6 +1733,8 @@ void USER_OLED_DrawArc(uint8_t x0, uint8_t y0, uint8_t radius, uint16_t start_an
 
 void USER_OLED_DrawBar(uint8_t row, uint8_t percent)
 {
+  uint8_t old_percent;
+
   if (row >= OLED_PAGE_COUNT)
   {
     return;
@@ -1339,13 +1748,23 @@ void USER_OLED_DrawBar(uint8_t row, uint8_t percent)
   {
     return;
   }
-  if (BarRAM[row] > percent)
+
+  old_percent = BarRAM[row];
+  if (old_percent == 0xFFu)
   {
-    memset(&GRAM[row][25u + percent], 0x00, (uint8_t)(BarRAM[row] - percent));
+    USER_OLED_SetBytes(&GRAM[row][25u], 0x00, 100u);
+    if (percent > 0u)
+    {
+      USER_OLED_SetBytes(&GRAM[row][25u], 0x7F, percent);
+    }
+  }
+  else if (old_percent > percent)
+  {
+    USER_OLED_SetBytes(&GRAM[row][25u + percent], 0x00, (uint8_t)(old_percent - percent));
   }
   else
   {
-    memset(&GRAM[row][25u + BarRAM[row]], 0x7F, (uint8_t)(percent - BarRAM[row]));
+    USER_OLED_SetBytes(&GRAM[row][25u + old_percent], 0x7F, (uint8_t)(percent - old_percent));
   }
   BarRAM[row] = percent;
   USER_OLED_putUI16(row, 0u, percent, 3u);
@@ -1356,11 +1775,11 @@ void USER_OLED_UpdateWave(uint8_t value)
   value &= 0x3Fu;
   for (uint8_t i = 0u; i < 127u; i++)
   {
-    GRAM[WaveRAM[i]][i] = 0u;
+    USER_OLED_SetByteIfChanged(&GRAM[WaveRAM[i]][i], 0u);
     WaveRAM[i] = WaveRAM[i + 1u];
-    GRAM[WaveRAM[i]][i] = GRAM[WaveRAM[i]][i + 1u];
+    USER_OLED_SetByteIfChanged(&GRAM[WaveRAM[i]][i], GRAM[WaveRAM[i]][i + 1u]);
   }
-  GRAM[WaveRAM[126]][127] = 0u;
+  USER_OLED_SetByteIfChanged(&GRAM[WaveRAM[126]][127], 0u);
   WaveRAM[127] = (uint8_t)(7u - (value >> 3));
   USER_OLED_SetPointFast(127u, value);
 }
@@ -1368,13 +1787,15 @@ void USER_OLED_UpdateWave(uint8_t value)
 void USER_OLED_ClearWave(void)
 {
   memset(WaveRAM, 0, sizeof(WaveRAM));
-  memset(GRAM, 0, sizeof(GRAM));
+  memset(&GRAM[0][0], 0, OLED_FRAME_BUFFER_SIZE);
+  memset(BarRAM, 0xFF, sizeof(BarRAM));
+  USER_OLED_MARK_DIRTY();
 }
 
 /*===========================================================================
  * 显示控制：对比度 / 开关显示 / 反色
  *
- * 所有控制函数直接发送 SSD1306 命令，操作前检查初始化状态。
+ * 控制函数只记录待发送命令，由 USER_OLED_Service() 在 DMA 空闲时统一发送。
  *===========================================================================*/
 
 void USER_OLED_SetContrast(uint8_t contrast)
@@ -1383,10 +1804,8 @@ void USER_OLED_SetContrast(uint8_t contrast)
   {
     return;
   }
-  __User_OLED_SetTxMode_Cmd();
-  __User_OLED_Send(OLED_cmd_SetContrast);
-  __User_OLED_Send(contrast);
-  __User_OLED_SetTxMode_Data();
+  oled_pending_contrast = contrast;
+  oled_pending_commands |= OLED_PENDING_CONTRAST;
 }
 
 void USER_OLED_SetDisplayOn(bool on)
@@ -1395,9 +1814,8 @@ void USER_OLED_SetDisplayOn(bool on)
   {
     return;
   }
-  __User_OLED_SetTxMode_Cmd();
-  __User_OLED_Send(on ? OLED_cmd_DisplayON : OLED_cmd_DisplayOFF);
-  __User_OLED_SetTxMode_Data();
+  oled_pending_display_on = on;
+  oled_pending_commands |= OLED_PENDING_DISPLAY;
 }
 
 void USER_OLED_InvertDisplay(bool invert)
@@ -1406,16 +1824,14 @@ void USER_OLED_InvertDisplay(bool invert)
   {
     return;
   }
-  __User_OLED_SetTxMode_Cmd();
-  __User_OLED_Send(invert ? OLED_cmd_ReverseDisplay : OLED_cmd_NormalDisplay);
-  __User_OLED_SetTxMode_Data();
+  oled_pending_invert = invert;
+  oled_pending_commands |= OLED_PENDING_INVERT;
 }
 
 /**
  * @brief SPI0 DMA 传输完成中断服务例程。
- * @details 每次 DMA 传输完 1024 字节 GRAM 后触发。
- *          若 OLED 仍在工作状态（isOLED_AtWork），立即启动下一轮 DMA 传输，
- *          实现 GRAM → OLED 的连续自动刷新。
+ * @details 每次 DMA 传输完一帧后只清除 busy 状态。
+ *          下一帧由 USER_OLED_Service() 按固定周期启动。
  */
 void SPI0_IRQHandler(void)
 {
@@ -1423,9 +1839,6 @@ void SPI0_IRQHandler(void)
   if (itSource == DL_SPI_IIDX_DMA_DONE_TX)
   {
     DL_SPI_clearInterruptStatus(SPI0, SPI_CPU_INT_IMASK_DMA_DONE_TX_MASK);
-    if (isOLED_AtWork)
-    {
-      __User_OLED_SPI_Transmit_DMA(&GRAM[0][0], 1024u);
-    }
+    oled_dma_busy = 0u;
   }
 }

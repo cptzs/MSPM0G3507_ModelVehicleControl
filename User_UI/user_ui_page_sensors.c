@@ -206,7 +206,7 @@ void USER_UI_ShowPhotoelectricPageDynamic(void)
 }
 
 /**
- * @brief Photoelectric 页面按键处理 — LEFT/RIGHT 选通道，UP/DOWN 选阈值类型，ENTER/ESC 调整阈值。
+ * @brief Photoelectric 页面按键处理 — UP/DOWN 选阈值类型，LEFT/RIGHT 调整阈值，ENTER 自动校准。
  */
 void USER_UI_PhotoelectricOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
@@ -217,13 +217,31 @@ void USER_UI_PhotoelectricOnKey(Button_t key, USER_UI_KeyEvent_t event)
     case LEFT:
         if ((event == USER_UI_KEY_EVENT_SHORT) || (event == USER_UI_KEY_EVENT_LONG_REPEAT))
         {
-            s_photo_selected_channel = (s_photo_selected_channel == 0u) ? (uint8_t)(OEMT_AN_COUNT - 1u) : (uint8_t)(s_photo_selected_channel - 1u);
+            if (s_photo_selected_threshold == 1u)
+            {
+                threshold = USER_OEMT_AN_GetHysteresisLow(s_photo_selected_channel);
+                USER_OEMT_AN_SetHysteresisLow(s_photo_selected_channel, (threshold > 50u) ? (uint16_t)(threshold - 50u) : 0u);
+            }
+            else
+            {
+                threshold = USER_OEMT_AN_GetHysteresisHigh(s_photo_selected_channel);
+                USER_OEMT_AN_SetHysteresisHigh(s_photo_selected_channel, (threshold > 50u) ? (uint16_t)(threshold - 50u) : 0u);
+            }
         }
         break;
     case RIGHT:
         if ((event == USER_UI_KEY_EVENT_SHORT) || (event == USER_UI_KEY_EVENT_LONG_REPEAT))
         {
-            s_photo_selected_channel = (s_photo_selected_channel == (OEMT_AN_COUNT - 1u)) ? 0u : (uint8_t)(s_photo_selected_channel + 1u);
+            if (s_photo_selected_threshold == 1u)
+            {
+                USER_OEMT_AN_SetHysteresisLow(s_photo_selected_channel,
+                                              (uint16_t)(USER_OEMT_AN_GetHysteresisLow(s_photo_selected_channel) + 50u));
+            }
+            else
+            {
+                USER_OEMT_AN_SetHysteresisHigh(s_photo_selected_channel,
+                                               (uint16_t)(USER_OEMT_AN_GetHysteresisHigh(s_photo_selected_channel) + 50u));
+            }
         }
         break;
     case UP:
@@ -240,36 +258,16 @@ void USER_UI_PhotoelectricOnKey(Button_t key, USER_UI_KeyEvent_t event)
         {
             if (s_photo_selected_threshold == 1u)
             {
-                USER_OEMT_AN_SetHysteresisLow(s_photo_selected_channel,
-                                              (uint16_t)(USER_OEMT_AN_GetHysteresisLow(s_photo_selected_channel) + 50u));
+                USER_OEMT_AN_AutoSetHysteresisLow();
             }
             else
             {
-                USER_OEMT_AN_SetHysteresisHigh(s_photo_selected_channel,
-                                               (uint16_t)(USER_OEMT_AN_GetHysteresisHigh(s_photo_selected_channel) + 50u));
+                USER_OEMT_AN_AutoSetHysteresisHigh();
             }
         }
         else if (event == USER_UI_KEY_EVENT_LONG)
         {
             USER_OEMT_AN_AutoSetHysteresisHigh();
-        }
-        break;
-    case ESC:
-        if (event == USER_UI_KEY_EVENT_SHORT)
-        {
-            if (s_photo_selected_threshold == 1u)
-            {
-                threshold = USER_OEMT_AN_GetHysteresisLow(s_photo_selected_channel);
-                USER_OEMT_AN_SetHysteresisLow(s_photo_selected_channel, (threshold > 50u) ? (uint16_t)(threshold - 50u) : 0u);
-            }
-            else
-            {
-                threshold = USER_OEMT_AN_GetHysteresisHigh(s_photo_selected_channel);
-                USER_OEMT_AN_SetHysteresisHigh(s_photo_selected_channel, (threshold > 50u) ? (uint16_t)(threshold - 50u) : 0u);
-            }
-        }
-        else if (event == USER_UI_KEY_EVENT_LONG)
-        {
             USER_OEMT_AN_AutoSetHysteresisLow();
         }
         break;
@@ -499,24 +497,19 @@ void USER_UI_ShowGyroscopePageDynamic(void)
 }
 
 /**
- * @brief Gyroscope 页面按键处理 — ENTER 设角度参考，ESC 设偏航参考。
+ * @brief Gyroscope 页面按键处理 — ENTER 短按设角度参考，ENTER 长按设偏航参考。
  */
 void USER_UI_GyroscopeOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
-    if (event != USER_UI_KEY_EVENT_SHORT)
+    if (key == ENTER)
     {
-        return;
-    }
-
-    switch (key)
-    {
-    case ENTER:
-        USER_IMU_SetOrder(IMU_ODR_SETANGREF);
-        break;
-    case ESC:
-        USER_IMU_SetOrder(IMU_ODR_SETYAWREF);
-        break;
-    default:
-        break;
+        if (event == USER_UI_KEY_EVENT_SHORT)
+        {
+            USER_IMU_SetOrder(IMU_ODR_SETANGREF);
+        }
+        else if (event == USER_UI_KEY_EVENT_LONG)
+        {
+            USER_IMU_SetOrder(IMU_ODR_SETYAWREF);
+        }
     }
 }

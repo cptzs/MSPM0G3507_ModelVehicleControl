@@ -31,7 +31,7 @@ extern "C"
      *
      * 由 main 初始化阶段调用，确保所有依赖的外设已就绪。
      */
-    void USER_UI_UT_Actions_Init(void);
+    void USER_UI_UnitTestActions_Init(void);
 
     /**
      * @brief 根据测试项索引执行对应的硬件动作。
@@ -41,7 +41,7 @@ extern "C"
      *
      * @note 本函数应为非阻塞，耗时动作通过状态机在后台完成。
      */
-    USER_UI_UT_ActionResult_t USER_UI_UT_Action_Execute(uint8_t item_index);
+    USER_UI_UT_ActionResult_t USER_UI_UnitTest_ExecuteAction(uint8_t item_index);
 
     /**
      * @brief 获取指定测试项的当前状态文本。
@@ -49,17 +49,17 @@ extern "C"
      * @param item_index 测试项索引。
      * @return 状态字符串（如 "OK"、"FAIL"、"running" 等），不可为 NULL。
      */
-    const char *USER_UI_UT_Action_GetStatus(uint8_t item_index);
+    const char *USER_UI_UnitTestAction_GetStatus(uint8_t item_index);
 
     /**
      * @brief 获取测试项总数。
      */
-    uint8_t USER_UI_UT_Action_GetItemCount(void);
+    uint8_t USER_UI_UnitTestAction_GetItemCount(void);
 
     /**
      * @brief 获取测试项名称。
      */
-    const char *USER_UI_UT_Action_GetItemName(uint8_t item_index);
+    const char *USER_UI_UnitTestAction_GetItemName(uint8_t item_index);
 
 #ifdef __cplusplus
 }

@@ -35,7 +35,7 @@ static volatile uint16_t oemt_an_hysteresis_low[OEMT_AN_COUNT];
 /// @brief 切换模拟复用器通道。
 /// @param idx 通道索引，范围 0-7。
 /// @return true 表示切换成功。
-static bool USER_OEMT_AN_SetChannel(uint8_t idx)
+static bool USER_OEMT_SetChannel(uint8_t idx)
 {
     if (idx >= OEMT_AN_COUNT)
     {
@@ -80,7 +80,7 @@ static bool USER_OEMT_AN_SetChannel(uint8_t idx)
 
 /// @brief 读取当前模拟复用通道。
 /// @return true 表示读取成功。
-static bool USER_OEMT_AN_ReadCurrentChannel(void)
+static bool USER_OEMT_ReadCurrentChannel(void)
 {
     uint16_t adc_value;
     uint8_t channel = oemt_an_scan_channel;
@@ -107,7 +107,7 @@ static bool USER_OEMT_AN_ReadCurrentChannel(void)
 
 /// @brief 切换到下一路模拟复用通道。
 /// @return true 表示切换成功。
-static bool USER_OEMT_AN_ChangeChannel(void)
+static bool USER_OEMT_ChangeChannel(void)
 {
     if (!oemt_an_enable)
     {
@@ -120,18 +120,18 @@ static bool USER_OEMT_AN_ChangeChannel(void)
         oemt_an_scan_channel = 0;
     }
 
-    return USER_OEMT_AN_SetChannel(oemt_an_scan_channel);
+    return USER_OEMT_SetChannel(oemt_an_scan_channel);
 }
 
 /// @brief 统计模拟复用模式实际扫描频率的 SysTick 回调。
-static void USER_SysTickCallback_OEMT_AN(void)
+static void USER_OEMT_SysTickCallback(void)
 {
     oemt_an_scan_rate_real = oemt_an_scan_count * 1000U / OEMT_AN_COUNT;
     oemt_an_scan_count = 0;
 }
 
 /// @brief 使能模拟复用光电扫描。
-void USER_OEMT_AN_Enable(void)
+void USER_OEMT_Enable(void)
 {
     if (oemt_an_enable_port != NULL && oemt_an_enable_pin != 0U)
     {
@@ -139,13 +139,13 @@ void USER_OEMT_AN_Enable(void)
     }
 
     oemt_an_enable = true;
-    USER_OEMT_AN_SetChannel(oemt_an_scan_channel);
+    USER_OEMT_SetChannel(oemt_an_scan_channel);
     __NVIC_EnableIRQ(TIMER_OEMT_INST_INT_IRQN);
     DL_Timer_startCounter(oemt_an_timer);
 }
 
 /// @brief 禁用模拟复用光电扫描。
-void USER_OEMT_AN_Disable(void)
+void USER_OEMT_Disable(void)
 {
     if (oemt_an_enable_port != NULL && oemt_an_enable_pin != 0U)
     {
@@ -160,7 +160,7 @@ void USER_OEMT_AN_Disable(void)
 /// @brief 获取指定通道的 ADC 原始值。
 /// @param idx 通道索引，范围 0-7。
 /// @return ADC 原始值，通道越界时返回 0。
-uint16_t USER_OEMT_AN_GetRawData(uint8_t idx)
+uint16_t USER_OEMT_GetRawData(uint8_t idx)
 {
     if (idx >= OEMT_AN_COUNT)
     {
@@ -172,7 +172,7 @@ uint16_t USER_OEMT_AN_GetRawData(uint8_t idx)
 
 /// @brief 获取实际扫描频率。
 /// @return 单通道等效扫描频率，单位 Hz。
-uint32_t USER_OEMT_AN_GetScanRate(void)
+uint32_t USER_OEMT_GetScanRate(void)
 {
     return oemt_an_scan_rate_real;
 }
@@ -180,7 +180,7 @@ uint32_t USER_OEMT_AN_GetScanRate(void)
 /// @brief 设置模拟量高滞回阈值。
 /// @param idx 通道索引，范围 0-7。
 /// @param threshold 高滞回阈值。
-void USER_OEMT_AN_SetHysteresisHigh(uint8_t idx, uint16_t threshold)
+void USER_OEMT_SetHysteresisHigh(uint8_t idx, uint16_t threshold)
 {
     if (idx >= OEMT_AN_COUNT)
     {
@@ -200,7 +200,7 @@ void USER_OEMT_AN_SetHysteresisHigh(uint8_t idx, uint16_t threshold)
 /// @brief 设置模拟量低滞回阈值。
 /// @param idx 通道索引，范围 0-7。
 /// @param threshold 低滞回阈值。
-void USER_OEMT_AN_SetHysteresisLow(uint8_t idx, uint16_t threshold)
+void USER_OEMT_SetHysteresisLow(uint8_t idx, uint16_t threshold)
 {
     if (idx >= OEMT_AN_COUNT)
     {
@@ -220,7 +220,7 @@ void USER_OEMT_AN_SetHysteresisLow(uint8_t idx, uint16_t threshold)
 /// @brief 获取模拟量高滞回阈值。
 /// @param idx 通道索引，范围 0-7。
 /// @return 高滞回阈值，通道越界时返回 0。
-uint16_t USER_OEMT_AN_GetHysteresisHigh(uint8_t idx)
+uint16_t USER_OEMT_GetHysteresisHigh(uint8_t idx)
 {
     if (idx >= OEMT_AN_COUNT)
     {
@@ -233,7 +233,7 @@ uint16_t USER_OEMT_AN_GetHysteresisHigh(uint8_t idx)
 /// @brief 获取模拟量低滞回阈值。
 /// @param idx 通道索引，范围 0-7。
 /// @return 低滞回阈值，通道越界时返回 0。
-uint16_t USER_OEMT_AN_GetHysteresisLow(uint8_t idx)
+uint16_t USER_OEMT_GetHysteresisLow(uint8_t idx)
 {
     if (idx >= OEMT_AN_COUNT)
     {
@@ -245,7 +245,7 @@ uint16_t USER_OEMT_AN_GetHysteresisLow(uint8_t idx)
 
 /// @brief 自动设置模拟量高滞回阈值。
 /// @note 会采集 32 次当前原始数据，期间产生约 320 ms 阻塞。
-void USER_OEMT_AN_AutoSetHysteresisHigh(void)
+void USER_OEMT_AutoSetHysteresisHigh(void)
 {
     uint8_t i;
     uint8_t j;
@@ -270,13 +270,13 @@ void USER_OEMT_AN_AutoSetHysteresisHigh(void)
 
         oemt_an_raw_data_average[i] = oemt_an_raw_data_sum[i] / OEMT_AN_AUTO_SAMPLE_COUNT;
         candidate = (uint16_t)(oemt_an_raw_data_average[i] * 0.7f);
-        USER_OEMT_AN_SetHysteresisHigh(i, candidate);
+        USER_OEMT_SetHysteresisHigh(i, candidate);
     }
 }
 
 /// @brief 自动设置模拟量低滞回阈值。
 /// @note 会采集 32 次当前原始数据，期间产生约 320 ms 阻塞。
-void USER_OEMT_AN_AutoSetHysteresisLow(void)
+void USER_OEMT_AutoSetHysteresisLow(void)
 {
     uint8_t i;
     uint8_t j;
@@ -301,7 +301,7 @@ void USER_OEMT_AN_AutoSetHysteresisLow(void)
 
         oemt_an_raw_data_average[i] = oemt_an_raw_data_sum[i] / OEMT_AN_AUTO_SAMPLE_COUNT;
         candidate = (uint16_t)(oemt_an_raw_data_average[i] * 2.5f);
-        USER_OEMT_AN_SetHysteresisLow(i, candidate);
+        USER_OEMT_SetHysteresisLow(i, candidate);
     }
 }
 
@@ -309,7 +309,7 @@ void USER_OEMT_AN_AutoSetHysteresisLow(void)
 /// @param result_data 光电状态输出缓存，长度至少为 OEMT_AN_COUNT。
 /// @param analog_raw_data ADC 原始值指针。
 /// @return true 表示初始化成功。
-bool USER_OEMT_AN_Init(uint16_t *result_data, uint16_t *analog_raw_data)
+bool USER_OEMT_Init(uint16_t *result_data, uint16_t *analog_raw_data)
 {
     uint8_t i;
 
@@ -342,9 +342,9 @@ bool USER_OEMT_AN_Init(uint16_t *result_data, uint16_t *analog_raw_data)
     }
 
     DL_Timer_enableInterrupt(oemt_an_timer, DL_TIMERG_INTERRUPT_LOAD_EVENT);
-    USER_OEMT_AN_SetChannel(0);
-    USER_SYSTICK_RegisterCallback(USER_SysTickCallback_OEMT_AN);
-    USER_OEMT_AN_Enable();
+    USER_OEMT_SetChannel(0);
+    USER_SysTick_RegisterCallback(USER_OEMT_SysTickCallback);
+    USER_OEMT_Enable();
 
     return true;
 }
@@ -363,7 +363,7 @@ void TIMER_OEMT_INST_IRQHandler(void)
         return;
     }
 
-    USER_OEMT_AN_ReadCurrentChannel();
-    USER_OEMT_AN_ChangeChannel();
+    USER_OEMT_ReadCurrentChannel();
+    USER_OEMT_ChangeChannel();
     oemt_an_scan_count++;
 }

@@ -291,12 +291,6 @@ bool SYSCFG_DL_SYSCTL_SYSPLL_init(void);
 /* Defines for BUZZER0: GPIOA.16 with pinCMx 38 on package pin 9 */
 #define BUZZER_BUZZER0_PIN                                      (DL_GPIO_PIN_16)
 #define BUZZER_BUZZER0_IOMUX                                     (IOMUX_PINCM38)
-/* Port definition for Pin Group ENCODERA */
-#define ENCODERA_PORT                                                    (GPIOA)
-
-/* Defines for DIR0: GPIOA.15 with pinCMx 37 on package pin 8 */
-#define ENCODERA_DIR0_PIN                                       (DL_GPIO_PIN_15)
-#define ENCODERA_DIR0_IOMUX                                      (IOMUX_PINCM37)
 /* Port definition for Pin Group LED */
 #define LED_PORT                                                         (GPIOB)
 
@@ -348,15 +342,27 @@ bool SYSCFG_DL_SYSCTL_SYSPLL_init(void);
 /* Defines for NRST: GPIOA.10 with pinCMx 21 on package pin 56 */
 #define OLED_NRST_PIN                                           (DL_GPIO_PIN_10)
 #define OLED_NRST_IOMUX                                          (IOMUX_PINCM21)
-/* Port definition for Pin Group ENCODERB */
-#define ENCODERB_PORT                                                    (GPIOB)
-
-/* Defines for DIR1: GPIOB.18 with pinCMx 44 on package pin 15 */
-#define ENCODERB_DIR1_PIN                                       (DL_GPIO_PIN_18)
-#define ENCODERB_DIR1_IOMUX                                      (IOMUX_PINCM44)
-/* Defines for DIR2: GPIOB.7 with pinCMx 24 on package pin 59 */
-#define ENCODERB_DIR2_PIN                                        (DL_GPIO_PIN_7)
-#define ENCODERB_DIR2_IOMUX                                      (IOMUX_PINCM24)
+/* Defines for ODOM_DIR: GPIOA.15 with pinCMx 37 on package pin 8 */
+#define ENCODER_ODOM_DIR_PORT                                            (GPIOA)
+// pins affected by this interrupt request:["ODOM_DIR"]
+#define ENCODER_GPIOA_INT_IRQN                                  (GPIOA_INT_IRQn)
+#define ENCODER_GPIOA_INT_IIDX                  (DL_INTERRUPT_GROUP1_IIDX_GPIOA)
+#define ENCODER_ODOM_DIR_IIDX                               (DL_GPIO_IIDX_DIO15)
+#define ENCODER_ODOM_DIR_PIN                                    (DL_GPIO_PIN_15)
+#define ENCODER_ODOM_DIR_IOMUX                                   (IOMUX_PINCM37)
+/* Defines for LEFT_DIR: GPIOB.18 with pinCMx 44 on package pin 15 */
+#define ENCODER_LEFT_DIR_PORT                                            (GPIOB)
+// pins affected by this interrupt request:["LEFT_DIR","RIGHT_DIR"]
+#define ENCODER_GPIOB_INT_IRQN                                  (GPIOB_INT_IRQn)
+#define ENCODER_GPIOB_INT_IIDX                  (DL_INTERRUPT_GROUP1_IIDX_GPIOB)
+#define ENCODER_LEFT_DIR_IIDX                               (DL_GPIO_IIDX_DIO18)
+#define ENCODER_LEFT_DIR_PIN                                    (DL_GPIO_PIN_18)
+#define ENCODER_LEFT_DIR_IOMUX                                   (IOMUX_PINCM44)
+/* Defines for RIGHT_DIR: GPIOB.7 with pinCMx 24 on package pin 59 */
+#define ENCODER_RIGHT_DIR_PORT                                           (GPIOB)
+#define ENCODER_RIGHT_DIR_IIDX                               (DL_GPIO_IIDX_DIO7)
+#define ENCODER_RIGHT_DIR_PIN                                    (DL_GPIO_PIN_7)
+#define ENCODER_RIGHT_DIR_IOMUX                                  (IOMUX_PINCM24)
 /* Port definition for Pin Group MOTOR */
 #define MOTOR_PORT                                                       (GPIOB)
 

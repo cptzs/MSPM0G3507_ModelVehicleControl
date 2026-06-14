@@ -36,56 +36,56 @@ typedef struct
 /// @brief 使能舵机
 /// @param servo_index 舵机索引，范围为0-3
 /// @return bool 使能成功返回true，失败返回false
-bool USER_SERVO_Enable(Servo_Instance servo_index);
+bool USER_Servo_Enable(Servo_Instance servo_index);
 
 /// @brief 禁用舵机
 /// @param servo_index 舵机索引，范围为0-3
 /// @return bool 禁用成功返回true，失败返回false
-bool USER_SERVO_Disable(Servo_Instance servo_index);
+bool USER_Servo_Disable(Servo_Instance servo_index);
 
 /// @brief 计算舵机脉冲宽度
 /// @param relative_angle 舵机相对角度，范围为[min_angle, max_angle]，左转为负，右转为正
 /// @param servo_index 舵机索引，范围为0-3
 /// @return 计算得到的脉冲宽度，单位为us
-uint16_t USER_SERVO_CalculatePulseWidth(Servo_Instance servo_index, int16_t relative_angle);
+uint16_t USER_Servo_CalculatePulseWidth(Servo_Instance servo_index, int16_t relative_angle);
 
 /// @brief 设置舵机角度
 /// @param servo_index 舵机索引，范围为0-3
 /// @param angle 舵机角度，范围为[min_angle, max_angle]
 /// @return bool 设置成功返回true，失败返回false
-bool USER_SERVO_SetAngle(Servo_Instance servo_index, int16_t angle);
+bool USER_Servo_SetAngle(Servo_Instance servo_index, int16_t angle);
 
 /// @brief 获取舵机当前角度
 /// @param servo_index 舵机索引，范围为0-3
 /// @return 当前舵机角度，单位为度
-int16_t USER_SERVO_GetAngle(Servo_Instance servo_index);
+int16_t USER_Servo_GetAngle(Servo_Instance servo_index);
 
 /// @brief 启动舵机控制
-void USER_SERVO_Start();
+void USER_Servo_Start();
 
 /// @brief 停止舵机控制
-void USER_SERVO_Stop();
+void USER_Servo_Stop();
 
 /// @brief 获取指定索引的舵机当前脉冲宽度
 /// @param servo_index 舵机索引
 /// @return 当前脉冲宽度，单位：us
-uint16_t USER_SERVO_GetWidth(Servo_Instance servo_index);
+uint16_t USER_Servo_GetWidth(Servo_Instance servo_index);
 
 /// @brief 获取舵机误差修正系数
 /// @return 当前误差修正系数
-float USER_SERVO_GetFError();
+float USER_Servo_GetFError();
 
 /// @brief 配置舵机用定时器
 /// @return bool 配置成功返回true，失败返回false
-void USER_SERVO_TimerConfig();
+void USER_Servo_TimerConfig();
 
 /// @brief 初始化舵机配置
 /// @param servo_config 舵机配置结构体指针
 /// @return bool 初始化成功返回true，失败返回false
-bool USER_SERVO_Config(ServoConfig_Struct_TypeDef *servo_config);
+bool USER_Servo_Config(ServoConfig_Struct_TypeDef *servo_config);
 
 /// @brief 初始化全部舵机
 /// @return bool 初始化成功返回true，失败返回false
-bool USER_SERVO_Init();
+bool USER_Servo_Init();
 
 #endif // USERLIB_SERVO_H

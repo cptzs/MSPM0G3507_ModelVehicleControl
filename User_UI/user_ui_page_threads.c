@@ -63,7 +63,7 @@ void USER_UI_ThreadsOnKey(Button_t key, USER_UI_KeyEvent_t event)
 
 void USER_UI_ShowThreadsPageStatic(void)
 {
-    USER_OLED_putString(1u, 0u, "TASK    L/us   M/us   ", USER_UI_THREADS_LINE_LEN);
+    USER_OLED_PutString(1u, 0u, "TASK    L/us   M/us   ", USER_UI_THREADS_LINE_LEN);
 }
 
 void USER_UI_ShowThreadsPageDynamic(void)
@@ -77,7 +77,7 @@ void USER_UI_ShowThreadsPageDynamic(void)
     total_tasks = USER_OS_GetTaskCount();
     if (total_tasks == 0u)
     {
-        USER_OLED_putString(USER_UI_THREADS_FIRST_DATA_ROW,
+        USER_OLED_PutString(USER_UI_THREADS_FIRST_DATA_ROW,
                             0u,
                             "No scheduler tasks  ",
                             USER_UI_THREADS_LINE_LEN);
@@ -107,12 +107,12 @@ void USER_UI_ShowThreadsPageDynamic(void)
             stats.max_cost_us = USER_UI_THREADS_COST_LIMIT_US;
         }
 
-        USER_OLED_putString(row, 0u, "       L:     M:    ", USER_UI_THREADS_LINE_LEN);
-        USER_OLED_putString(row,
+        USER_OLED_PutString(row, 0u, "       L:     M:    ", USER_UI_THREADS_LINE_LEN);
+        USER_OLED_PutString(row,
                             0u,
                             (stats.name != NULL) ? stats.name : "?",
                             7u);
-        USER_OLED_putUI16(row, 10u, (uint16_t)stats.last_cost_us, 4u);
-        USER_OLED_putUI16(row, 17u, (uint16_t)stats.max_cost_us, 4u);
+        USER_OLED_PutUI16(row, 10u, (uint16_t)stats.last_cost_us, 4u);
+        USER_OLED_PutUI16(row, 17u, (uint16_t)stats.max_cost_us, 4u);
     }
 }

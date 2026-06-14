@@ -57,7 +57,7 @@ static Lidar_Config_Typedef lidar_config = {0};
  * @brief 解析激光雷达接收数据
  * @note 该函数需要在主流程中调用，调用间隔应为8ms
  */
-void USER_LIDAR_Task(void)
+void USER_LiDAR_Task(void)
 {
     uint8_t i;
     uint8_t *l_data;
@@ -107,7 +107,7 @@ void USER_LIDAR_Task(void)
  * @note 该函数需要在SysTick中断中调用
  * @note slave_id在1到4之间循环
  */
-void USER_SysTick_Callback_lidar_Process(void)
+void USER_LiDAR_SysTickCallback(void)
 {
     if (!lidar_config.initialized)
     {
@@ -212,7 +212,7 @@ void CAN_RxFifo0NewMessageHandler(void)
  * @param data_ptr 外部数据结构指针数组
  * @details 初始化CAN通信和数据结构，与外部数据建立连接
  */
-void USER_lidar_Init(Lidar_Data_Typedef *data_ptr)
+void USER_LiDAR_Init(Lidar_Data_Typedef *data_ptr)
 {
     uint16_t i;
 
@@ -277,7 +277,7 @@ void USER_lidar_Init(Lidar_Data_Typedef *data_ptr)
     USER_CAN_RegisterCallback(CAN_INTR_RF0N, CAN_RxFifo0NewMessageHandler);
 
     /* 注册SysTick回调函数 */
-    USER_SYSTICK_RegisterCallback(USER_SysTick_Callback_lidar_Process);
+    USER_SysTick_RegisterCallback(USER_LiDAR_SysTickCallback);
 
     /* 标记初始化完成 */
     lidar_config.initialized = true;

@@ -2767,6 +2767,12 @@
             </excluded>
         </file>
         <file>
+            <name>$PROJ_DIR$\User_UI\user_ui_page_sysinfo.c</name>
+            <excluded>
+                <configuration>Minimal_Bringup</configuration>
+            </excluded>
+        </file>
+        <file>
             <name>$PROJ_DIR$\User_UI\user_ui_page_imu_sum.c</name>
             <excluded>
                 <configuration>Minimal_Bringup</configuration>
@@ -2823,6 +2829,9 @@
     </group>
     <file>
         <name>$PROJ_DIR$\globals.c</name>
+    </file>
+    <file>
+        <name>$PROJ_DIR$\User_OS\user_firmware_info.c</name>
     </file>
     <file>
         <name>$PROJ_DIR$\main.c</name>

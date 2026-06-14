@@ -48,7 +48,7 @@ static UT_ActionItem_t ut_items[] = {
  *
  * @note CAM HELLO 等不可用项初始化为 "N/A"，其余为 "pending"。
  */
-void USER_UI_UT_Actions_Init(void)
+void USER_UI_UnitTestActions_Init(void)
 {
     uint8_t i;
 
@@ -67,7 +67,7 @@ void USER_UI_UT_Actions_Init(void)
  *
  * @note 本函数为非阻塞，执行后立即返回。耗时动作预留状态机扩展点。
  */
-USER_UI_UT_ActionResult_t USER_UI_UT_Action_Execute(uint8_t item_index)
+USER_UI_UT_ActionResult_t USER_UI_UnitTest_ExecuteAction(uint8_t item_index)
 {
     if (item_index >= (uint8_t)UT_ITEM_COUNT)
     {
@@ -115,10 +115,10 @@ USER_UI_UT_ActionResult_t USER_UI_UT_Action_Execute(uint8_t item_index)
         /* 预留：USER_CAN_SendTestFrame(); */
         break;
     case 10u: /* BUZZ 1MS */
-        USER_LBB_Buzzer_On(1u);
+        USER_BoardIO_Buzzer_On(1u);
         break;
     case 11u: /* LED 300MS */
-        USER_LBB_LED_On(LED0, 300u);
+        USER_BoardIO_LED_On(LED0, 300u);
         break;
     default:
         return USER_UI_UT_ACTION_SKIP;
@@ -135,7 +135,7 @@ USER_UI_UT_ActionResult_t USER_UI_UT_Action_Execute(uint8_t item_index)
  * @param item_index 测试项索引。
  * @return 状态字符串，越界返回 "ERR"。
  */
-const char *USER_UI_UT_Action_GetStatus(uint8_t item_index)
+const char *USER_UI_UnitTestAction_GetStatus(uint8_t item_index)
 {
     if (item_index >= (uint8_t)UT_ITEM_COUNT)
     {
@@ -150,7 +150,7 @@ const char *USER_UI_UT_Action_GetStatus(uint8_t item_index)
  *
  * @return 编译期确定的测试项数量。
  */
-uint8_t USER_UI_UT_Action_GetItemCount(void)
+uint8_t USER_UI_UnitTestAction_GetItemCount(void)
 {
     return (uint8_t)UT_ITEM_COUNT;
 }
@@ -161,7 +161,7 @@ uint8_t USER_UI_UT_Action_GetItemCount(void)
  * @param item_index 测试项索引。
  * @return 名称字符串，越界返回 "?"。
  */
-const char *USER_UI_UT_Action_GetItemName(uint8_t item_index)
+const char *USER_UI_UnitTestAction_GetItemName(uint8_t item_index)
 {
     if (item_index >= (uint8_t)UT_ITEM_COUNT)
     {

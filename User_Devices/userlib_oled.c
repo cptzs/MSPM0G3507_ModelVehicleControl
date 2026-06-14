@@ -832,7 +832,7 @@ void USER_OLED_CleanRow(uint8_t row)
  * @note 每个字符宽 6 像素，超出屏幕右边界自动截断。
  *       越界字符（>= USER_FONT_ASCII_6X8_COUNT）回退显示空格。
  */
-void USER_OLED_putString(uint8_t row, uint8_t column, const char *str, uint8_t length)
+void USER_OLED_PutString(uint8_t row, uint8_t column, const char *str, uint8_t length)
 {
   uint8_t remaining_chars;
   uint8_t x;
@@ -871,7 +871,7 @@ void USER_OLED_putString(uint8_t row, uint8_t column, const char *str, uint8_t l
  *
  * @note 越界字符回退显示空格，仅在字模字节变化时写入 GRAM。
  */
-void USER_OLED_putChar(uint8_t row, uint8_t column, char ch)
+void USER_OLED_PutChar(uint8_t row, uint8_t column, char ch)
 {
   uint8_t x;
 
@@ -1049,11 +1049,11 @@ static bool USER_OLED_U16ToStr(uint16_t num, uint8_t radix, uint8_t *str, uint8_
  * @param number 待显示的 16 位无符号整数（0~65535）。
  * @param length 显示宽度（1~4 字符），左端补 '0'。
  */
-void USER_OLED_putX16(uint8_t row, uint8_t column, uint16_t number, uint8_t length)
+void USER_OLED_PutX16(uint8_t row, uint8_t column, uint16_t number, uint8_t length)
 {
   if (USER_OLED_U16ToStr(number, 16u, (uint8_t *)str_temp, length, '0'))
   {
-    USER_OLED_putString(row, column, str_temp, length);
+    USER_OLED_PutString(row, column, str_temp, length);
   }
 }
 
@@ -1065,11 +1065,11 @@ void USER_OLED_putX16(uint8_t row, uint8_t column, uint16_t number, uint8_t leng
  * @param number 待显示的 16 位无符号整数（0~65535）。
  * @param length 显示宽度（1~5 字符），左端补空格。
  */
-void USER_OLED_putUI16(uint8_t row, uint8_t column, uint16_t number, uint8_t length)
+void USER_OLED_PutUI16(uint8_t row, uint8_t column, uint16_t number, uint8_t length)
 {
   if (USER_OLED_U16ToStr(number, 10u, (uint8_t *)str_temp, length, ' '))
   {
-    USER_OLED_putString(row, column, str_temp, length);
+    USER_OLED_PutString(row, column, str_temp, length);
   }
 }
 
@@ -1084,7 +1084,7 @@ void USER_OLED_putUI16(uint8_t row, uint8_t column, uint16_t number, uint8_t len
  * @note 负数时符号位占 1 字符，若 length < 2 则忽略显示。
  *       INT16_MIN 特殊处理绝对值以避免溢出。
  */
-void USER_OLED_putI16(uint8_t row, uint8_t column, int16_t number, uint8_t length)
+void USER_OLED_PutI16(uint8_t row, uint8_t column, int16_t number, uint8_t length)
 {
   if ((length == 0u) || (length > 6u))
   {
@@ -1110,7 +1110,7 @@ void USER_OLED_putI16(uint8_t row, uint8_t column, int16_t number, uint8_t lengt
 
   if (USER_OLED_U16ToStr(abs_value, 10u, (uint8_t *)&str_temp[start], (uint8_t)(length - start), ' '))
   {
-    USER_OLED_putString(row, column, str_temp, length);
+    USER_OLED_PutString(row, column, str_temp, length);
   }
 }
 
@@ -1126,7 +1126,7 @@ void USER_OLED_putI16(uint8_t row, uint8_t column, int16_t number, uint8_t lengt
  * @note 自动处理 NaN（显示 "NaN"）、±Inf（显示 "Inf" / "-Inf"）。
  *       小数部分四舍五入到指定位数，总宽度 = int_length + float_length + 1（小数点）。
  */
-void USER_OLED_putFloat(uint8_t row, uint8_t column, float number, uint8_t int_length, uint8_t float_length)
+void USER_OLED_PutFloat(uint8_t row, uint8_t column, float number, uint8_t int_length, uint8_t float_length)
 {
   static const uint16_t pow10[] = {1u, 10u, 100u, 1000u, 10000u};
   uint16_t scale;
@@ -1145,12 +1145,12 @@ void USER_OLED_putFloat(uint8_t row, uint8_t column, float number, uint8_t int_l
   }
   if (number != number)
   {
-    USER_OLED_putString(row, column, "NaN", 3u);
+    USER_OLED_PutString(row, column, "NaN", 3u);
     return;
   }
   if ((number > FLT_MAX) || (number < -FLT_MAX))
   {
-    USER_OLED_putString(row, column, number > 0.0f ? "Inf" : "-Inf", number > 0.0f ? 3u : 4u);
+    USER_OLED_PutString(row, column, number > 0.0f ? "Inf" : "-Inf", number > 0.0f ? 3u : 4u);
     return;
   }
 
@@ -1194,7 +1194,7 @@ void USER_OLED_putFloat(uint8_t row, uint8_t column, float number, uint8_t int_l
     temp[pos++] = frac_str[i];
   }
   temp[pos] = '\0';
-  USER_OLED_putString(row, column, temp, (uint8_t)(int_length + float_length + 1u));
+  USER_OLED_PutString(row, column, temp, (uint8_t)(int_length + float_length + 1u));
 }
 
 /*===========================================================================
@@ -1741,7 +1741,7 @@ void USER_OLED_DrawBar(uint8_t row, uint8_t percent)
   }
   if (percent > 100u)
   {
-    USER_OLED_putString(row, 0u, "Err :Overflow", 13u);
+    USER_OLED_PutString(row, 0u, "Err :Overflow", 13u);
     return;
   }
   if (BarRAM[row] == percent)
@@ -1767,7 +1767,7 @@ void USER_OLED_DrawBar(uint8_t row, uint8_t percent)
     USER_OLED_SetBytes(&GRAM[row][25u + old_percent], 0x7F, (uint8_t)(percent - old_percent));
   }
   BarRAM[row] = percent;
-  USER_OLED_putUI16(row, 0u, percent, 3u);
+  USER_OLED_PutUI16(row, 0u, percent, 3u);
 }
 
 void USER_OLED_UpdateWave(uint8_t value)

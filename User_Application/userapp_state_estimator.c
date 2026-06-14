@@ -75,7 +75,7 @@ static bool state_initialized;
 /**
  * @brief 检查指定编码器通道是否可用于状态估测。
  */
-static bool USER_STATE_EncoderValid(uint8_t index)
+static bool USER_State_EncoderValid(uint8_t index)
 {
     return (encoder_data[index].status != ENCODER_STA_UNINIT) &&
            (encoder_data[index].status != ENCODER_STA_OVERFLOW);
@@ -84,7 +84,7 @@ static bool USER_STATE_EncoderValid(uint8_t index)
 /**
  * @brief 检查 IMU 数据是否可用于航向估测。
  */
-static bool USER_STATE_ImuValid(void)
+static bool USER_State_ImuValid(void)
 {
     return imu_data.status == IMU_STA_OK;
 }
@@ -92,7 +92,7 @@ static bool USER_STATE_ImuValid(void)
 /**
  * @brief 将驱动轮累计编码器计数换算为 mm。
  */
-static float USER_STATE_WheelDistanceMm(uint8_t index)
+static float USER_State_WheelDistanceMm(uint8_t index)
 {
     return (float)encoder_data[index].sum_distance / VEHICLE_ENCODER_PULSE_PER_MM;
 }
@@ -100,7 +100,7 @@ static float USER_STATE_WheelDistanceMm(uint8_t index)
 /**
  * @brief 将驱动轮编码器速度计数换算为 mm/s。
  */
-static float USER_STATE_WheelSpeedMmS(uint8_t index)
+static float USER_State_WheelSpeedMmS(uint8_t index)
 {
     return ((float)encoder_data[index].speed / VEHICLE_ENCODER_PULSE_PER_MM) *
            (1000.0f / (float)VEHICLE_ENCODER_UPDATE_INTERVAL_MS);
@@ -109,7 +109,7 @@ static float USER_STATE_WheelSpeedMmS(uint8_t index)
 /**
  * @brief 将角度误差归一化到 [-180, 180] deg。
  */
-static float USER_STATE_NormalizeAngle(float angle_deg)
+static float USER_State_NormalizeAngle(float angle_deg)
 {
     while (angle_deg > 180.0f)
     {
@@ -133,16 +133,16 @@ static float USER_STATE_NormalizeAngle(float angle_deg)
  * 3. 使用左右驱动轮距离差计算后备航向角和后备角速度。
  * 4. 更新路程计快照，为下个周期的速度估计准备增量基准。
  */
-static void USER_STATE_CollectRawInput(USER_STATE_RawInput_t *raw)
+static void USER_State_CollectRawInput(USER_STATE_RawInput_t *raw)
 {
     bool left_valid;
     bool right_valid;
 
-    raw->odom_valid = USER_STATE_EncoderValid(0);
-    left_valid = USER_STATE_EncoderValid(1);
-    right_valid = USER_STATE_EncoderValid(2);
+    raw->odom_valid = USER_State_EncoderValid(0);
+    left_valid = USER_State_EncoderValid(1);
+    right_valid = USER_State_EncoderValid(2);
     raw->wheel_valid = left_valid && right_valid;
-    raw->imu_valid = USER_STATE_ImuValid();
+    raw->imu_valid = USER_State_ImuValid();
 
     raw->odom_count = encoder_data[0].sum_distance;
     raw->odom_delta_count = raw->odom_count - last_odom_count;
@@ -152,10 +152,10 @@ static void USER_STATE_CollectRawInput(USER_STATE_RawInput_t *raw)
     raw->odom_delta_mm = (float)raw->odom_delta_count * ODOMETER_MM_PER_PULSE;
     raw->odom_speed_mm_s = raw->odom_delta_mm / STATE_DT_S;
 
-    raw->left_distance_mm = USER_STATE_WheelDistanceMm(1);
-    raw->right_distance_mm = USER_STATE_WheelDistanceMm(2);
-    raw->left_speed_mm_s = USER_STATE_WheelSpeedMmS(1);
-    raw->right_speed_mm_s = USER_STATE_WheelSpeedMmS(2);
+    raw->left_distance_mm = USER_State_WheelDistanceMm(1);
+    raw->right_distance_mm = USER_State_WheelDistanceMm(2);
+    raw->left_speed_mm_s = USER_State_WheelSpeedMmS(1);
+    raw->right_speed_mm_s = USER_State_WheelSpeedMmS(2);
 
     raw->wheel_distance_mm = (raw->left_distance_mm + raw->right_distance_mm) * 0.5f;
     raw->wheel_speed_mm_s = (raw->left_speed_mm_s + raw->right_speed_mm_s) * 0.5f;
@@ -174,7 +174,7 @@ static void USER_STATE_CollectRawInput(USER_STATE_RawInput_t *raw)
 /**
  * @brief 发布所有估测方法共用的原始诊断字段。
  */
-static void USER_STATE_PublishRawDiagnostics(const USER_STATE_RawInput_t *raw)
+static void USER_State_PublishRawDiagnostics(const USER_STATE_RawInput_t *raw)
 {
     state_estimate.odom_distance_mm = raw->odom_distance_mm;
     state_estimate.wheel_distance_mm = raw->wheel_distance_mm;
@@ -184,14 +184,14 @@ static void USER_STATE_PublishRawDiagnostics(const USER_STATE_RawInput_t *raw)
     state_estimate.imu_yaw_deg = raw->imu_yaw_deg;
     state_estimate.imu_gyro_yaw_deg = raw->imu_gyro_yaw_deg;
     state_estimate.slip_error_mm = raw->odom_distance_mm - raw->wheel_distance_mm;
-    state_estimate.yaw_disagree_deg = USER_STATE_NormalizeAngle(raw->imu_yaw_deg -
+    state_estimate.yaw_disagree_deg = USER_State_NormalizeAngle(raw->imu_yaw_deg -
                                                                 raw->wheel_yaw_deg);
 }
 
 /**
  * @brief 根据有效性标志刷新通用质量分数。
  */
-static void USER_STATE_UpdateQuality(void)
+static void USER_State_UpdateQuality(void)
 {
     uint8_t quality;
 
@@ -220,11 +220,11 @@ static void USER_STATE_UpdateQuality(void)
  * 3. 使用选定航向和本周期距离增量更新平面位置。
  * 4. 发布有效性、降级标志和质量分数。
  */
-static void USER_STATE_RunDefaultEstimator(const USER_STATE_RawInput_t *raw)
+static void USER_State_RunDefaultEstimator(const USER_STATE_RawInput_t *raw)
 {
     float yaw_rad;
 
-    USER_STATE_PublishRawDiagnostics(raw);
+    USER_State_PublishRawDiagnostics(raw);
 
     if (raw->odom_valid)
     {
@@ -260,7 +260,7 @@ static void USER_STATE_RunDefaultEstimator(const USER_STATE_RawInput_t *raw)
     state_estimate.velocity_valid = raw->odom_valid || raw->wheel_valid;
     state_estimate.degraded = (!raw->odom_valid || !raw->imu_valid) ? 1u : 0u;
     state_estimate.source = USER_STATE_SOURCE_RAW;
-    USER_STATE_UpdateQuality();
+    USER_State_UpdateQuality();
 }
 
 /**
@@ -268,9 +268,9 @@ static void USER_STATE_RunDefaultEstimator(const USER_STATE_RawInput_t *raw)
  *
  * 当前尚未实现权重配置、可信度门限和异常剔除逻辑，因此先回落到默认直通估测器。
  */
-static void USER_STATE_RunWeightedEstimator(const USER_STATE_RawInput_t *raw)
+static void USER_State_RunWeightedEstimator(const USER_STATE_RawInput_t *raw)
 {
-    USER_STATE_RunDefaultEstimator(raw);
+    USER_State_RunDefaultEstimator(raw);
 }
 
 /**
@@ -278,9 +278,9 @@ static void USER_STATE_RunWeightedEstimator(const USER_STATE_RawInput_t *raw)
  *
  * 当前尚未接入 Algorithm 层互补滤波库，因此先回落到默认直通估测器。
  */
-static void USER_STATE_RunComplementaryEstimator(const USER_STATE_RawInput_t *raw)
+static void USER_State_RunComplementaryEstimator(const USER_STATE_RawInput_t *raw)
 {
-    USER_STATE_RunDefaultEstimator(raw);
+    USER_State_RunDefaultEstimator(raw);
 }
 
 /**
@@ -288,9 +288,9 @@ static void USER_STATE_RunComplementaryEstimator(const USER_STATE_RawInput_t *ra
  *
  * 当前尚未接入 Algorithm 层 Kalman 库，因此先回落到默认直通估测器。
  */
-static void USER_STATE_RunKalmanEstimator(const USER_STATE_RawInput_t *raw)
+static void USER_State_RunKalmanEstimator(const USER_STATE_RawInput_t *raw)
 {
-    USER_STATE_RunDefaultEstimator(raw);
+    USER_State_RunDefaultEstimator(raw);
 }
 
 /**
@@ -298,42 +298,42 @@ static void USER_STATE_RunKalmanEstimator(const USER_STATE_RawInput_t *raw)
  *
  * 当前尚未接入 Algorithm 层 EKF 库，因此先回落到默认直通估测器。
  */
-static void USER_STATE_RunEkfEstimator(const USER_STATE_RawInput_t *raw)
+static void USER_State_RunEkfEstimator(const USER_STATE_RawInput_t *raw)
 {
-    USER_STATE_RunDefaultEstimator(raw);
+    USER_State_RunDefaultEstimator(raw);
 }
 
 /**
  * @brief 按当前选择的策略执行估测。
  */
-static void USER_STATE_RunSelectedEstimator(const USER_STATE_RawInput_t *raw)
+static void USER_State_RunSelectedEstimator(const USER_STATE_RawInput_t *raw)
 {
     switch (state_method)
     {
     case USER_STATE_SOURCE_WEIGHTED:
-        USER_STATE_RunWeightedEstimator(raw);
+        USER_State_RunWeightedEstimator(raw);
         break;
 
     case USER_STATE_SOURCE_COMPLEMENTARY:
-        USER_STATE_RunComplementaryEstimator(raw);
+        USER_State_RunComplementaryEstimator(raw);
         break;
 
     case USER_STATE_SOURCE_KALMAN:
-        USER_STATE_RunKalmanEstimator(raw);
+        USER_State_RunKalmanEstimator(raw);
         break;
 
     case USER_STATE_SOURCE_EKF:
-        USER_STATE_RunEkfEstimator(raw);
+        USER_State_RunEkfEstimator(raw);
         break;
 
     case USER_STATE_SOURCE_RAW:
     default:
-        USER_STATE_RunDefaultEstimator(raw);
+        USER_State_RunDefaultEstimator(raw);
         break;
     }
 }
 
-void USER_STATE_Init(void)
+void USER_State_Init(void)
 {
     /* 步骤1：清零所有发布的估计量和诊断量。 */
     state_estimate.distance_mm = 0.0f;
@@ -365,7 +365,7 @@ void USER_STATE_Init(void)
     state_initialized = true;
 }
 
-void USER_STATE_SetEstimatorMethod(USER_STATE_Source_t method)
+void USER_State_SetEstimatorMethod(USER_STATE_Source_t method)
 {
     switch (method)
     {
@@ -383,7 +383,7 @@ void USER_STATE_SetEstimatorMethod(USER_STATE_Source_t method)
     }
 }
 
-USER_STATE_Source_t USER_STATE_GetEstimatorMethod(void)
+USER_STATE_Source_t USER_State_GetEstimatorMethod(void)
 {
     return state_method;
 }
@@ -394,17 +394,17 @@ void USER_State_Task(void)
 
     if (!state_initialized)
     {
-        USER_STATE_Init();
+        USER_State_Init();
     }
 
     /* 步骤1：统一采集和换算原始输入，具体估测方法不直接读取传感器。 */
-    USER_STATE_CollectRawInput(&raw);
+    USER_State_CollectRawInput(&raw);
 
     /* 步骤2：按当前选择的方法发布统一状态估计。 */
-    USER_STATE_RunSelectedEstimator(&raw);
+    USER_State_RunSelectedEstimator(&raw);
 }
 
-const USER_STATE_Estimate_t *USER_STATE_GetEstimate(void)
+const USER_STATE_Estimate_t *USER_State_GetEstimate(void)
 {
     return &state_estimate;
 }

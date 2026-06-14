@@ -41,7 +41,7 @@ ServoConfig_Struct_TypeDef servo_config_local[4]; // 本地舵机配置缓存
 /// @brief 禁用指定索引的舵机
 /// @param servo_index 舵机索引，范围为0-3
 /// @return bool 禁用成功返回true，失败返回false
-bool USER_SERVO_Disable(Servo_Instance servo_index)
+bool USER_Servo_Disable(Servo_Instance servo_index)
 {
     if (servo_index >= 4)
     {
@@ -65,7 +65,7 @@ bool USER_SERVO_Disable(Servo_Instance servo_index)
 /// @brief 启用指定索引的舵机
 /// @param servo_index 舵机索引，范围为0-3
 /// @return bool 启用成功返回true，失败返回false
-bool USER_SERVO_Enable(Servo_Instance servo_index)
+bool USER_Servo_Enable(Servo_Instance servo_index)
 {
     if (servo_index >= 4)
     {
@@ -90,7 +90,7 @@ bool USER_SERVO_Enable(Servo_Instance servo_index)
 /// @param servo_index 舵机索引，范围为0-3
 /// @param relative_angle 舵机相对角度，范围为[min_angle, max_angle]，左转为负，右转为正
 /// @return 计算得到的脉冲宽度，单位为us
-uint16_t USER_SERVO_CalculatePulseWidth(Servo_Instance servo_index, int16_t relative_angle)
+uint16_t USER_Servo_CalculatePulseWidth(Servo_Instance servo_index, int16_t relative_angle)
 {
     float angle_offset; /* 角度偏移量 */
     float pulse_width;  /* 计算得到的脉冲宽度 */
@@ -136,14 +136,14 @@ uint16_t USER_SERVO_CalculatePulseWidth(Servo_Instance servo_index, int16_t rela
  * @retval true 设置成功。
  * @retval false 索引无效或舵机未初始化。
  */
-bool USER_SERVO_SetAngle(Servo_Instance servo_index, int16_t angle)
+bool USER_Servo_SetAngle(Servo_Instance servo_index, int16_t angle)
 {
     if (servo_index >= 4)
     {
         return false; // 无效索引，直接返回
     }
     // 计算脉冲宽度
-    servo_pulse_width_us[servo_index] = USER_SERVO_CalculatePulseWidth(servo_index, angle);
+    servo_pulse_width_us[servo_index] = USER_Servo_CalculatePulseWidth(servo_index, angle);
     // 增加系统误差修正
     servo_pulse_width_us[servo_index] += (uint32_t)(servo_pulse_width_us[servo_index] * servo_system_error_correction);
     // 计算对应的计数值
@@ -156,7 +156,7 @@ bool USER_SERVO_SetAngle(Servo_Instance servo_index, int16_t angle)
 }
 
 /// @brief 获取指定索引的舵机当前相对角度
-int16_t USER_SERVO_GetAngle(Servo_Instance servo_index)
+int16_t USER_Servo_GetAngle(Servo_Instance servo_index)
 {
     if (servo_index >= 4)
     {
@@ -173,21 +173,21 @@ int16_t USER_SERVO_GetAngle(Servo_Instance servo_index)
 /// @brief 获取指定索引的舵机当前脉冲宽度
 /// @param servo_index 舵机索引
 /// @return 当前脉冲宽度，单位：us
-uint16_t USER_SERVO_GetWidth(Servo_Instance servo_index)
+uint16_t USER_Servo_GetWidth(Servo_Instance servo_index)
 {
     return servo_pulse_width_us[servo_index]; // 返回当前脉冲宽度，单位：us
 }
 
 /// @brief 获取舵机误差修正系数
 /// @return 当前误差修正系数
-float USER_SERVO_GetFError()
+float USER_Servo_GetFError()
 {
     // 返回当前舵机的误差修正系数
     return servo_system_error_correction;
 }
 
 /// @brief 配置舵机用定时器
-void USER_SERVO_TimerConfig()
+void USER_Servo_TimerConfig()
 {
     // 获取TIMA1的计数周期
     timer_fullperiod_clk = DL_Timer_getLoadValue(TIMA1) + 1;
@@ -223,14 +223,14 @@ void USER_SERVO_TimerConfig()
 }
 
 /// @brief 启动舵机控制
-void USER_SERVO_Start()
+void USER_Servo_Start()
 {
     // 启动定时器
     DL_Timer_startCounter(TIMA1);
 }
 
 /// @brief 停止舵机控制
-void USER_SERVO_Stop()
+void USER_Servo_Stop()
 {
     uint8_t i;
     // 停止定时器
@@ -249,7 +249,7 @@ void USER_SERVO_Stop()
 /// @brief 初始化舵机
 /// @param config 舵机配置结构体指针，包括4个舵机的配置
 /// @return 初始化成功返回true，失败返回false
-bool USER_SERVO_Config(ServoConfig_Struct_TypeDef *config)
+bool USER_Servo_Config(ServoConfig_Struct_TypeDef *config)
 {
     if (config == NULL) // 检查配置指针是否为NULL
     {
@@ -279,7 +279,7 @@ bool USER_SERVO_Config(ServoConfig_Struct_TypeDef *config)
     // 启用对应通道的CC中断
     DL_Timer_enableInterrupt(TIMA1, CCP_INTERRUPT_MASK[config->instance]);
     // 设置舵机初始角度
-    USER_SERVO_SetAngle(config->instance, servo_config_local[config->instance].center_angle);
+    USER_Servo_SetAngle(config->instance, servo_config_local[config->instance].center_angle);
     // 标记为已初始化
     servo_initialized[config->instance] = true;
     // 启用舵机
@@ -290,7 +290,7 @@ bool USER_SERVO_Config(ServoConfig_Struct_TypeDef *config)
 
 /// @brief 初始化全部舵机
 /// @return bool 初始化成功返回true，失败返回false
-bool USER_SERVO_Init()
+bool USER_Servo_Init()
 {
     ServoConfig_Struct_TypeDef servo_config[4];
 
@@ -314,20 +314,20 @@ bool USER_SERVO_Init()
     servo_config[SERVO_1].pin = SERVO_SERVO2_PIN;
 
     // 配置舵机定时器
-    USER_SERVO_TimerConfig();
+    USER_Servo_TimerConfig();
 
     // 初始化每个舵机
-    if (!USER_SERVO_Config(&servo_config[SERVO_0]))
+    if (!USER_Servo_Config(&servo_config[SERVO_0]))
     {
         return false; // 初始化失败
     }
-    if (!USER_SERVO_Config(&servo_config[SERVO_1]))
+    if (!USER_Servo_Config(&servo_config[SERVO_1]))
     {
         return false; // 初始化失败
     }
 
     // 启动舵机控制
-    USER_SERVO_Start();
+    USER_Servo_Start();
     return true;
 }
 

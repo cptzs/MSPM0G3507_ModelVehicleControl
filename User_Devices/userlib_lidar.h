@@ -63,13 +63,13 @@ typedef struct
  * @brief 解析lidar接收数据
  * @note 该函数需要在主流程中调用，调用间隔应为8ms
  */
-void USER_LIDAR_Task(void);
+void USER_LiDAR_Task(void);
 
 /**
  * @brief 初始化lidar模块
  * @param data_ptr 外部数据结构指针数组
  * @note 该函数会初始化lidar的CAN通信和相关数据结构，设置外部数据指针
  */
-void USER_lidar_Init(Lidar_Data_Typedef *data_ptr);
+void USER_LiDAR_Init(Lidar_Data_Typedef *data_ptr);
 
 #endif // _USERLIB_LIDAR_H

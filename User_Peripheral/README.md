@@ -25,9 +25,9 @@
 ### SysTick (`userlib_systick.h`)
 
 ```c
-void USER_SYSTEM_Init(void);                                          // 系统时钟和 SysTick 初始化
-bool USER_SYSTICK_RegisterCallback(void (*callback)(void));           // 注册 1ms 回调
-bool USER_SYSTICK_UnregisterCallback(void (*callback)(void));         // 注销回调
+void USER_System_Init(void);                                          // 系统时钟和 SysTick 初始化
+bool USER_SysTick_RegisterCallback(void (*callback)(void));           // 注册 1ms 回调
+bool USER_SysTick_UnregisterCallback(void (*callback)(void));         // 注销回调
 ```
 
 SysTick 被配置为 1ms 周期定时器。`USER_OS` 通过注册回调 `USER_OS_TickISR` 来驱动
@@ -39,7 +39,7 @@ SysTick 被配置为 1ms 周期定时器。`USER_OS` 通过注册回调 `USER_OS
 void USER_UART_Init(UART_Instance uart_inst);
 void USER_UART_Transmit_DMA(UART_Instance, uint8_t *data, uint16_t len);
 void USER_UART_Receive_DMA(UART_Instance, uint8_t *buf, uint16_t len);
-uint16_t USER_UART_GetRecievedBytes_DMA(UART_Instance);
+uint16_t USER_UART_GetReceivedBytes_DMA(UART_Instance);
 void USER_UART_Abort_Receive(UART_Instance);
 void USER_UART_RegisterCallback(UART_Instance, UART_Interrupt, void(*handler)(void));
 ```

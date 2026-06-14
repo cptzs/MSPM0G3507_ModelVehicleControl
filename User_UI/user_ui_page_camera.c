@@ -14,9 +14,9 @@
  */
 void USER_UI_ShowCameraPageStatic(void)
 {
-    USER_OLED_putString(1u, 0u, "Camera not connected ", 21u);
-    USER_OLED_putString(3u, 0u, "Reserved for future  ", 21u);
-    USER_OLED_putString(5u, 0u, "smart camera module  ", 21u);
+    USER_OLED_PutString(1u, 0u, "Camera not connected ", 21u);
+    USER_OLED_PutString(3u, 0u, "Reserved for future  ", 21u);
+    USER_OLED_PutString(5u, 0u, "smart camera module  ", 21u);
 }
 
 /**

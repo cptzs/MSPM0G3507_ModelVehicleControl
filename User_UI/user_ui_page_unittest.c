@@ -53,7 +53,7 @@ static void USER_UI_UnitTest_BuildLine(char *line_buf,
     line_buf[21] = '\0';
 
     line_buf[0] = selected ? '>' : ' ';
-    name = USER_UI_UT_Action_GetItemName(item_index);
+    name = USER_UI_UnitTestAction_GetItemName(item_index);
     for (i = 0u; (i < 12u) && (name != NULL) && (name[i] != '\0'); i++)
     {
         line_buf[(uint8_t)(1u + i)] = name[i];
@@ -69,7 +69,7 @@ static void USER_UI_UnitTest_BuildLine(char *line_buf,
  */
 static void USER_UI_UnitTest_ClampScroll(void)
 {
-    uint8_t item_count = USER_UI_UT_Action_GetItemCount();
+    uint8_t item_count = USER_UI_UnitTestAction_GetItemCount();
 
     if (item_count <= UI_UNITTEST_VISIBLE_ROWS)
     {
@@ -92,7 +92,7 @@ static void USER_UI_UnitTest_ClampScroll(void)
  */
 void USER_UI_UnitTestOnKey(Button_t key, USER_UI_KeyEvent_t event)
 {
-    uint8_t item_count = USER_UI_UT_Action_GetItemCount();
+    uint8_t item_count = USER_UI_UnitTestAction_GetItemCount();
 
     if ((event == USER_UI_KEY_EVENT_NONE) || (item_count == 0u))
     {
@@ -123,7 +123,7 @@ void USER_UI_UnitTestOnKey(Button_t key, USER_UI_KeyEvent_t event)
     else if (key == ENTER)
     {
         /* 通过动作层执行硬件操作，UI 页面不直接操作硬件 */
-        (void)USER_UI_UT_Action_Execute(unittest_selected_index);
+        (void)USER_UI_UnitTest_ExecuteAction(unittest_selected_index);
     }
 }
 
@@ -132,13 +132,13 @@ void USER_UI_UnitTestOnKey(Button_t key, USER_UI_KeyEvent_t event)
  */
 void USER_UI_ShowUnitTestStatic(void)
 {
-    USER_OLED_putString(1u, 0u, "UP/DN SEL ENTER RUN", 21u);
-    USER_OLED_putString(2u, 0u, "                     ", 21u);
-    USER_OLED_putString(3u, 0u, "                     ", 21u);
-    USER_OLED_putString(4u, 0u, "                     ", 21u);
-    USER_OLED_putString(5u, 0u, "                     ", 21u);
-    USER_OLED_putString(6u, 0u, "                     ", 21u);
-    USER_OLED_putString(7u, 0u, "Ready                ", 21u);
+    USER_OLED_PutString(1u, 0u, "UP/DN SEL ENTER RUN", 21u);
+    USER_OLED_PutString(2u, 0u, "                     ", 21u);
+    USER_OLED_PutString(3u, 0u, "                     ", 21u);
+    USER_OLED_PutString(4u, 0u, "                     ", 21u);
+    USER_OLED_PutString(5u, 0u, "                     ", 21u);
+    USER_OLED_PutString(6u, 0u, "                     ", 21u);
+    USER_OLED_PutString(7u, 0u, "Ready                ", 21u);
 }
 
 /**
@@ -149,7 +149,7 @@ void USER_UI_ShowUnitTestStatic(void)
 void USER_UI_ShowUnitTestDynamic(void)
 {
     uint8_t row;
-    uint8_t item_count = USER_UI_UT_Action_GetItemCount();
+    uint8_t item_count = USER_UI_UnitTestAction_GetItemCount();
     char line_buf[22];
 
     /* 按键由 core 层通过 on_key() 回调统一分发，动态刷新函数不再直读按键 */
@@ -178,11 +178,11 @@ void USER_UI_ShowUnitTestDynamic(void)
             line_buf[21] = '\0';
         }
 
-        USER_OLED_putString(oled_row, 0u, line_buf, 21u);
+        USER_OLED_PutString(oled_row, 0u, line_buf, 21u);
     }
 
-    USER_OLED_putString(7u, 0u, "STAT:               ", 21u);
-    USER_OLED_putString(7u, 6u,
-                        USER_UI_UT_Action_GetStatus(unittest_selected_index),
+    USER_OLED_PutString(7u, 0u, "STAT:               ", 21u);
+    USER_OLED_PutString(7u, 6u,
+                        USER_UI_UnitTestAction_GetStatus(unittest_selected_index),
                         15u);
 }

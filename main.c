@@ -1,10 +1,11 @@
 /**
  * @file main.c
  * @brief 主入口：设备初始化、调度器注册、主循环。
+ * @version v1.0.8
  *
- * 启动流程：SYSCFG_DL_init → USER_SYSTEM_Init → USER_OS_Init →
- * USER_GlobalData_Init → USER_Device_Init → USER_STATE_Init →
- * USER_RegisterSchedulerTasks → while(1) USER_OS_Run()
+ * 启动流程：SYSCFG_DL_init → USER_System_Init → USER_OS_Init →
+ * USER_GlobalData_Init → USER_Device_Init → USER_State_Init →
+ * USER_Scheduler_RegisterTasks → while(1) USER_OS_Run/idle WFI
  */
 
 #include "ti_msp_dl_config.h"
@@ -50,15 +51,15 @@
  */
 static void USER_Device_Init(void)
 {
-  USER_LBB_Init();
+  USER_BoardIO_Init();
   USER_OLED_Init();
-  USER_ENCODER_Init(encoder_data);
+  USER_Encoder_Init(encoder_data);
   USER_IMU_Init(true, &imu_data, UART_0);
   USER_Motor_Init();
   USER_ADC_Init(adc_data, 7);
-  USER_SERVO_Init();
-  USER_lidar_Init(lidar_data);
-  USER_OEMT_AN_Init(oemt_data, &adc_data[ADC_CHANNEL_2_P25]);
+  USER_Servo_Init();
+  USER_LiDAR_Init(lidar_data);
+  USER_OEMT_Init(oemt_data, &adc_data[ADC_CHANNEL_2_P25]);
   USER_Modbus_Slave_Init(true, UART_1, modbus_regs, &modbus_status);
 }
 
@@ -79,13 +80,14 @@ static void USER_Device_Init(void)
  *
  *       所有任务仍在 main while(1) 前台上下文中运行，不由独立栈或 PendSV 切换。
  */
-static void USER_RegisterSchedulerTasks(void)
+static void USER_Scheduler_RegisterTasks(void)
 {
   (void)USER_OS_RegisterTask("global", USER_GlobalData_Task, 1u, 0u, 0u);
-  (void)USER_OS_RegisterTask("state", USER_State_Task, 10u, 3u, 1u);
-  (void)USER_OS_RegisterTask("mcm", USER_MCM_Task, 10u, 4u, 2u);
-  (void)USER_OS_RegisterTask("race", USER_Race_Task, 10u, 5u, 3u);
-  (void)USER_OS_RegisterTask("lidar", USER_LIDAR_Task, 5u, 1u, 4u);
+  (void)USER_OS_RegisterTask("encoder", USER_Encoder_Task, 10u, 2u, 1u);
+  (void)USER_OS_RegisterTask("state", USER_State_Task, 10u, 3u, 2u);
+  (void)USER_OS_RegisterTask("mcm", USER_MCM_Task, 10u, 4u, 3u);
+  (void)USER_OS_RegisterTask("race", USER_Race_Task, 10u, 5u, 4u);
+  (void)USER_OS_RegisterTask("lidar", USER_LiDAR_Task, 5u, 1u, 4u);
   (void)USER_OS_RegisterTask("ui", USER_UI_Task, 5u, 2u, 6u);
 }
 
@@ -96,17 +98,20 @@ int main(void)
 {
   SYSCFG_DL_init();
 
-  USER_SYSTEM_Init();     /* 初始化系统时钟和系统滴答 */
+  USER_System_Init();     /* 初始化系统时钟和系统滴答 */
   USER_OS_Init();         /* 初始化 1ms 协作式调度器 */
   USER_GlobalData_Init(); /* 初始化全局数据结构 */
   USER_Device_Init();     /* 初始化用户外部设备 */
-  USER_STATE_Init();      /* 初始化统一车辆状态估计。 */
+  USER_State_Init();      /* 初始化统一车辆状态估计。 */
   USER_UI_Init();         /* 初始化 UI 页面、交互状态和测试项 */
 
-  USER_RegisterSchedulerTasks(); /* 注册协作式调度器任务 */
+  USER_Scheduler_RegisterTasks(); /* 注册协作式调度器任务 */
 
   while (true)
   {
-    USER_OS_Run(); /* 运行调度器，调度器内会调用各个注册的任务函数 */
+    if (!USER_OS_Run()) /* 无到期任务时进入睡眠，等待下一次中断唤醒 */
+    {
+      USER_OS_IdleWait(); /* 进入空闲等待状态 */
+    }
   }
 }

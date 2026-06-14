@@ -46,7 +46,10 @@ typedef struct
 
 void USER_OS_Init(void);
 void USER_OS_TickISR(void);
-void USER_OS_Run(void);
+bool USER_OS_HasReadyTask(void);
+bool USER_OS_Run(void);
+void USER_OS_IdleWait(void);
+uint16_t USER_OS_GetCpuLoadPermille(void);
 
 uint8_t USER_OS_RegisterTask(const char *name,
                              USER_OS_TaskFunction_t task,

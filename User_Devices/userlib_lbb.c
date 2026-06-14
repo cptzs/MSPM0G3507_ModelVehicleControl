@@ -58,7 +58,7 @@ const uint32_t BUTTON_PINS[BUTTON_COUNT] = {
  * @retval true 合法。
  * @retval false 越界。
  */
-static bool USER_LBB_Button_IsValid(Button_t button)
+static bool USER_BoardIO_Button_IsValid(Button_t button)
 {
     int button_index = (int)button;
     return ((button_index >= 0) && (button_index < BUTTON_COUNT));
@@ -67,7 +67,7 @@ static bool USER_LBB_Button_IsValid(Button_t button)
 /**
  * @brief 计算未消费的短按事件数量（生成数 - 已消费数）。
  */
-static uint16_t USER_LBB_Button_PendingShortRaw(uint8_t button)
+static uint16_t USER_BoardIO_Button_PendingShortRaw(uint8_t button)
 {
     return (uint16_t)(button_short_count[button] - button_short_consumed[button]);
 }
@@ -75,7 +75,7 @@ static uint16_t USER_LBB_Button_PendingShortRaw(uint8_t button)
 /**
  * @brief 计算未消费的长按事件数量。
  */
-static uint16_t USER_LBB_Button_PendingLongRaw(uint8_t button)
+static uint16_t USER_BoardIO_Button_PendingLongRaw(uint8_t button)
 {
     return (uint16_t)(button_long_count[button] - button_long_consumed[button]);
 }
@@ -83,7 +83,7 @@ static uint16_t USER_LBB_Button_PendingLongRaw(uint8_t button)
 /**
  * @brief 计算未消费的长按重复事件数量。
  */
-static uint16_t USER_LBB_Button_PendingLongRepeatRaw(uint8_t button)
+static uint16_t USER_BoardIO_Button_PendingLongRepeatRaw(uint8_t button)
 {
     return (uint16_t)(button_long_repeat_count[button] - button_long_repeat_consumed[button]);
 }
@@ -93,7 +93,7 @@ static uint16_t USER_LBB_Button_PendingLongRepeatRaw(uint8_t button)
  * @param value 被累加变量指针。
  * @param delta 增量。
  */
-static void USER_LBB_Button_AddTime(uint16_t *value, uint16_t delta)
+static void USER_BoardIO_Button_AddTime(uint16_t *value, uint16_t delta)
 {
     if (*value <= (uint16_t)(UINT16_MAX - delta))
     {
@@ -108,30 +108,30 @@ static void USER_LBB_Button_AddTime(uint16_t *value, uint16_t delta)
 /**
  * @brief 确认一次短按事件：递增短按计数、更新兼容状态、蜂鸣反馈 20ms。
  */
-static void USER_LBB_Button_OnShort(uint8_t button)
+static void USER_BoardIO_Button_OnShort(uint8_t button)
 {
     button_short_count[button]++;
-    USER_LBB_Buzzer_On(20);
+    USER_BoardIO_Buzzer_On(20);
 }
 
 /**
  * @brief 确认一次长按事件：递增长按计数、标记已触发、重置重复计时、蜂鸣反馈 10ms。
  */
-static void USER_LBB_Button_OnLong(uint8_t button)
+static void USER_BoardIO_Button_OnLong(uint8_t button)
 {
     button_long_count[button]++;
     button_long_reported[button] = true;
     button_repeat_time[button] = 0u;
-    USER_LBB_Buzzer_On(10);
+    USER_BoardIO_Buzzer_On(10);
 }
 
 /**
  * @brief 确认一次长按重复事件：递增重复计数、更新兼容状态、蜂鸣反馈 10ms。
  */
-static void USER_LBB_Button_OnLongRepeat(uint8_t button)
+static void USER_BoardIO_Button_OnLongRepeat(uint8_t button)
 {
     button_long_repeat_count[button]++;
-    USER_LBB_Buzzer_On(10);
+    USER_BoardIO_Buzzer_On(10);
 }
 
 /**
@@ -140,7 +140,7 @@ static void USER_LBB_Button_OnLongRepeat(uint8_t button)
  *          按钮扫描策略：每隔 BUTTON_SCAN_INTERVAL ms 采样一次物理电平，
  *          通过边沿和时长判断生成短按/长按/长按重复事件。
  */
-void USER_SysTick_Callback_GPIO_Process(void)
+void USER_BoardIO_ButtonSysTickCallback(void)
 {
     uint8_t i;
     ButtonState_t button_physical_state;
@@ -207,23 +207,23 @@ void USER_SysTick_Callback_GPIO_Process(void)
                 else
                 {
                     // 持续按下：更新按下时长。
-                    USER_LBB_Button_AddTime(&button_press_time[i], BUTTON_SCAN_INTERVAL);
+                    USER_BoardIO_Button_AddTime(&button_press_time[i], BUTTON_SCAN_INTERVAL);
 
                     if (!button_long_reported[i])
                     {
                         if (button_press_time[i] >= BUTTON_LONG_PRESS_TIME)
                         {
-                            USER_LBB_Button_OnLong(i);
+                            USER_BoardIO_Button_OnLong(i);
                         }
                     }
                     else
                     {
-                        USER_LBB_Button_AddTime(&button_repeat_time[i], BUTTON_SCAN_INTERVAL);
+                        USER_BoardIO_Button_AddTime(&button_repeat_time[i], BUTTON_SCAN_INTERVAL);
 
                         if (button_repeat_time[i] >= BUTTON_REPEAT_INTERVAL)
                         {
                             button_repeat_time[i] = 0u;
-                            USER_LBB_Button_OnLongRepeat(i);
+                            USER_BoardIO_Button_OnLongRepeat(i);
                         }
                     }
                 }
@@ -235,7 +235,7 @@ void USER_SysTick_Callback_GPIO_Process(void)
                     // 松手边沿：本次按下没有触发过长按，则确认一个短按。
                     if (!button_long_reported[i])
                     {
-                        USER_LBB_Button_OnShort(i);
+                        USER_BoardIO_Button_OnShort(i);
                     }
                 }
 
@@ -255,14 +255,14 @@ void USER_SysTick_Callback_GPIO_Process(void)
  * @param button 按钮枚举值。
  * @return 待消费的短按计数。
  */
-uint16_t USER_LBB_Button_GetPendingShortCount(Button_t button)
+uint16_t USER_BoardIO_Button_GetPendingShortCount(Button_t button)
 {
-    if (!USER_LBB_Button_IsValid(button))
+    if (!USER_BoardIO_Button_IsValid(button))
     {
         return 0u;
     }
 
-    return USER_LBB_Button_PendingShortRaw((uint8_t)button);
+    return USER_BoardIO_Button_PendingShortRaw((uint8_t)button);
 }
 
 /**
@@ -270,14 +270,14 @@ uint16_t USER_LBB_Button_GetPendingShortCount(Button_t button)
  * @param button 按钮枚举值。
  * @return 待消费的长按计数。
  */
-uint16_t USER_LBB_Button_GetPendingLongCount(Button_t button)
+uint16_t USER_BoardIO_Button_GetPendingLongCount(Button_t button)
 {
-    if (!USER_LBB_Button_IsValid(button))
+    if (!USER_BoardIO_Button_IsValid(button))
     {
         return 0u;
     }
 
-    return USER_LBB_Button_PendingLongRaw((uint8_t)button);
+    return USER_BoardIO_Button_PendingLongRaw((uint8_t)button);
 }
 
 /**
@@ -285,14 +285,14 @@ uint16_t USER_LBB_Button_GetPendingLongCount(Button_t button)
  * @param button 按钮枚举值。
  * @return 待消费的长按重复计数。
  */
-uint16_t USER_LBB_Button_GetPendingLongRepeatCount(Button_t button)
+uint16_t USER_BoardIO_Button_GetPendingLongRepeatCount(Button_t button)
 {
-    if (!USER_LBB_Button_IsValid(button))
+    if (!USER_BoardIO_Button_IsValid(button))
     {
         return 0u;
     }
 
-    return USER_LBB_Button_PendingLongRepeatRaw((uint8_t)button);
+    return USER_BoardIO_Button_PendingLongRepeatRaw((uint8_t)button);
 }
 
 /**
@@ -302,17 +302,17 @@ uint16_t USER_LBB_Button_GetPendingLongRepeatCount(Button_t button)
  * @retval true 存在并成功消费了一个短按事件。
  * @retval false 无待消费的短按事件或按钮无效。
  */
-bool USER_LBB_Button_ConsumeShort(Button_t button)
+bool USER_BoardIO_Button_ConsumeShort(Button_t button)
 {
     uint8_t index;
 
-    if (!USER_LBB_Button_IsValid(button))
+    if (!USER_BoardIO_Button_IsValid(button))
     {
         return false;
     }
 
     index = (uint8_t)button;
-    if (USER_LBB_Button_PendingShortRaw(index) == 0u)
+    if (USER_BoardIO_Button_PendingShortRaw(index) == 0u)
     {
         return false;
     }
@@ -327,17 +327,17 @@ bool USER_LBB_Button_ConsumeShort(Button_t button)
  * @retval true 存在并成功消费了一个长按事件。
  * @retval false 无待消费的长按事件或按钮无效。
  */
-bool USER_LBB_Button_ConsumeLong(Button_t button)
+bool USER_BoardIO_Button_ConsumeLong(Button_t button)
 {
     uint8_t index;
 
-    if (!USER_LBB_Button_IsValid(button))
+    if (!USER_BoardIO_Button_IsValid(button))
     {
         return false;
     }
 
     index = (uint8_t)button;
-    if (USER_LBB_Button_PendingLongRaw(index) == 0u)
+    if (USER_BoardIO_Button_PendingLongRaw(index) == 0u)
     {
         return false;
     }
@@ -352,17 +352,17 @@ bool USER_LBB_Button_ConsumeLong(Button_t button)
  * @retval true 存在并成功消费了一个长按重复事件。
  * @retval false 无待消费的长按重复事件或按钮无效。
  */
-bool USER_LBB_Button_ConsumeLongRepeat(Button_t button)
+bool USER_BoardIO_Button_ConsumeLongRepeat(Button_t button)
 {
     uint8_t index;
 
-    if (!USER_LBB_Button_IsValid(button))
+    if (!USER_BoardIO_Button_IsValid(button))
     {
         return false;
     }
 
     index = (uint8_t)button;
-    if (USER_LBB_Button_PendingLongRepeatRaw(index) == 0u)
+    if (USER_BoardIO_Button_PendingLongRepeatRaw(index) == 0u)
     {
         return false;
     }
@@ -377,19 +377,19 @@ bool USER_LBB_Button_ConsumeLongRepeat(Button_t button)
  * @param button 按钮枚举值。
  * @return 事件类型；无事件时返回 USER_LBB_BUTTON_EVENT_NONE。
  */
-USER_LBB_ButtonEvent_t USER_LBB_Button_ConsumeEvent(Button_t button)
+USER_LBB_ButtonEvent_t USER_BoardIO_Button_ConsumeEvent(Button_t button)
 {
-    if (USER_LBB_Button_ConsumeLong(button))
+    if (USER_BoardIO_Button_ConsumeLong(button))
     {
         return USER_LBB_BUTTON_EVENT_LONG;
     }
 
-    if (USER_LBB_Button_ConsumeLongRepeat(button))
+    if (USER_BoardIO_Button_ConsumeLongRepeat(button))
     {
         return USER_LBB_BUTTON_EVENT_LONG_REPEAT;
     }
 
-    if (USER_LBB_Button_ConsumeShort(button))
+    if (USER_BoardIO_Button_ConsumeShort(button))
     {
         return USER_LBB_BUTTON_EVENT_SHORT;
     }
@@ -404,11 +404,11 @@ USER_LBB_ButtonEvent_t USER_LBB_Button_ConsumeEvent(Button_t button)
  * @retval true 获取成功。
  * @retval false 参数无效。
  */
-bool USER_LBB_Button_GetStats(Button_t button, USER_LBB_ButtonStats_t *stats)
+bool USER_BoardIO_Button_GetStats(Button_t button, USER_LBB_ButtonStats_t *stats)
 {
     uint8_t index;
 
-    if ((stats == NULL) || (!USER_LBB_Button_IsValid(button)))
+    if ((stats == NULL) || (!USER_BoardIO_Button_IsValid(button)))
     {
         return false;
     }
@@ -424,9 +424,9 @@ bool USER_LBB_Button_GetStats(Button_t button, USER_LBB_ButtonStats_t *stats)
     stats->consumed_long_count = button_long_consumed[index];
     stats->consumed_repeat_count = button_long_repeat_consumed[index];
 
-    stats->pending_short_count = USER_LBB_Button_PendingShortRaw(index);
-    stats->pending_long_count = USER_LBB_Button_PendingLongRaw(index);
-    stats->pending_repeat_count = USER_LBB_Button_PendingLongRepeatRaw(index);
+    stats->pending_short_count = USER_BoardIO_Button_PendingShortRaw(index);
+    stats->pending_long_count = USER_BoardIO_Button_PendingLongRaw(index);
+    stats->pending_repeat_count = USER_BoardIO_Button_PendingLongRepeatRaw(index);
 
     stats->press_time_ms = button_press_time[index];
     stats->repeat_time_ms = button_repeat_time[index];
@@ -443,11 +443,11 @@ bool USER_LBB_Button_GetStats(Button_t button, USER_LBB_ButtonStats_t *stats)
  * @retval true 清零成功。
  * @retval false 按钮无效。
  */
-bool USER_LBB_Button_ClearStats(Button_t button)
+bool USER_BoardIO_Button_ClearStats(Button_t button)
 {
     uint8_t index;
 
-    if (!USER_LBB_Button_IsValid(button))
+    if (!USER_BoardIO_Button_IsValid(button))
     {
         return false;
     }
@@ -471,13 +471,13 @@ bool USER_LBB_Button_ClearStats(Button_t button)
 /**
  * @brief 清零所有按钮的全部统计计数和状态。
  */
-void USER_LBB_Button_ClearAllStats(void)
+void USER_BoardIO_Button_ClearAllStats(void)
 {
     uint8_t i;
 
     for (i = 0; i < BUTTON_COUNT; i++)
     {
-        (void)USER_LBB_Button_ClearStats((Button_t)i);
+        (void)USER_BoardIO_Button_ClearStats((Button_t)i);
     }
 }
 
@@ -485,7 +485,7 @@ void USER_LBB_Button_ClearAllStats(void)
  * @brief 初始化 LBB 模块（LED、蜂鸣器、按钮 GPIO 及 SysTick 回调）。
  * @details 清零所有 LED/蜂鸣器倒计时和按钮统计，注册 SysTick 扫描回调。
  */
-void USER_LBB_Init(void)
+void USER_BoardIO_Init(void)
 {
     uint8_t i;
 
@@ -503,7 +503,7 @@ void USER_LBB_Init(void)
         button_repeat_time[i] = 0;
         button_long_reported[i] = false;
     }
-    USER_LBB_Button_ClearAllStats();
+    USER_BoardIO_Button_ClearAllStats();
 
     // 初始化蜂鸣器倒计时
     buzzer_countdown = 0;
@@ -512,5 +512,5 @@ void USER_LBB_Init(void)
     button_scan_countdown = BUTTON_SCAN_INTERVAL;
 
     // 注册SysTick回调函数
-    USER_SYSTICK_RegisterCallback(USER_SysTick_Callback_GPIO_Process);
+    USER_SysTick_RegisterCallback(USER_BoardIO_ButtonSysTickCallback);
 }

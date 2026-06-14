@@ -302,16 +302,16 @@ void USER_UI_ShowRouteStatic(void)
 {
     USER_UI_RouteMap_Draw(RACE_ROUTE_TEMPLATE);
 
-    USER_OLED_putString(2u, UI_ROUTE_INFO_COL, "R00 ", 4u);
-    USER_OLED_putString(2u,
+    USER_OLED_PutString(2u, UI_ROUTE_INFO_COL, "R00 ", 4u);
+    USER_OLED_PutString(2u,
                         UI_ROUTE_INFO_COL + 4u,
                         USER_Race_GetRouteName(RACE_ROUTE_TEMPLATE),
                         7u);
-    USER_OLED_putString(3u, UI_ROUTE_INFO_COL, "HOLD", 4u);
+    USER_OLED_PutString(3u, UI_ROUTE_INFO_COL, "HOLD", 4u);
     USER_UI_RouteDrawProgressBar(0u);
     s_route_last_progress = 0u;
-    USER_OLED_putString(5u, UI_ROUTE_INFO_COL, "S-- IDLE", 8u);
-    USER_OLED_putString(6u, UI_ROUTE_INFO_COL, "TMO ----", 8u);
+    USER_OLED_PutString(5u, UI_ROUTE_INFO_COL, "S-- IDLE", 8u);
+    USER_OLED_PutString(6u, UI_ROUTE_INFO_COL, "TMO ----", 8u);
 }
 
 /**
@@ -355,7 +355,7 @@ void USER_UI_ShowRouteDynamic(void)
         progress = 0u;
     }
 
-    USER_OLED_putString(3u,
+    USER_OLED_PutString(3u,
                         UI_ROUTE_INFO_COL,
                         USER_UI_Route_IsWaitingRelease() ? "REL " : "HOLD",
                         4u);
@@ -369,7 +369,7 @@ void USER_UI_ShowRouteDynamic(void)
     if (USER_UI_Route_IsCountdown())
     {
         USER_UI_RouteFormatFixedText("S-- START", step_text, sizeof(step_text));
-        USER_OLED_putString(5u, UI_ROUTE_INFO_COL, step_text, 12u);
+        USER_OLED_PutString(5u, UI_ROUTE_INFO_COL, step_text, 12u);
     }
     else
     {
@@ -383,13 +383,13 @@ void USER_UI_ShowRouteDynamic(void)
             USER_UI_RouteFormatStepText(NULL, -1, step_text, sizeof(step_text));
         }
 
-        USER_OLED_putString(5u, UI_ROUTE_INFO_COL, step_text, 12u);
+        USER_OLED_PutString(5u, UI_ROUTE_INFO_COL, step_text, 12u);
     }
 
-    USER_OLED_putString(6u, UI_ROUTE_INFO_COL, "TMO ", 4u);
+    USER_OLED_PutString(6u, UI_ROUTE_INFO_COL, "TMO ", 4u);
     if (USER_UI_Route_IsCountdown())
     {
-        USER_OLED_putUI16(6u, UI_ROUTE_INFO_COL + 4u, USER_UI_Route_GetCountdownRemainMs(), 4u);
+        USER_OLED_PutUI16(6u, UI_ROUTE_INFO_COL + 4u, USER_UI_Route_GetCountdownRemainMs(), 4u);
     }
     else if (has_action)
     {
@@ -397,16 +397,16 @@ void USER_UI_ShowRouteDynamic(void)
         {
             timeout_remain_ms = 9999u;
         }
-        USER_OLED_putUI16(6u, UI_ROUTE_INFO_COL + 4u, (uint16_t)timeout_remain_ms, 4u);
+        USER_OLED_PutUI16(6u, UI_ROUTE_INFO_COL + 4u, (uint16_t)timeout_remain_ms, 4u);
     }
     else
     {
-        USER_OLED_putString(6u, UI_ROUTE_INFO_COL + 4u, "----", 4u);
+        USER_OLED_PutString(6u, UI_ROUTE_INFO_COL + 4u, "----", 4u);
     }
 
     if (USER_UI_Route_IsCountdown() && !buzzer_triggered)
     {
-        USER_LBB_Buzzer_On(100u);
+        USER_BoardIO_Buzzer_On(100u);
         buzzer_triggered = true;
     }
     else if (!USER_UI_Route_IsCountdown())

@@ -49,10 +49,10 @@ bool USER_UI_DrawPageStaticFromRegistry(DisplayPage_t page)
         return false;
     }
 
-    USER_OLED_putString(0u, 0u, "[", 1u);
-    USER_OLED_putUI16(0u, 1u, page_def->page, 2u);
-    USER_OLED_putString(0u, 3u, "] ", 2u);
-    USER_OLED_putString(0u, 5u, page_def->title, 13u);
+    USER_OLED_PutString(0u, 0u, "[", 1u);
+    USER_OLED_PutUI16(0u, 1u, page_def->page, 2u);
+    USER_OLED_PutString(0u, 3u, "] ", 2u);
+    USER_OLED_PutString(0u, 5u, page_def->title, 13u);
 
     if (page_def->show_static != NULL)
     {

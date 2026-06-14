@@ -186,7 +186,7 @@ void USER_UI_Init(void)
 {
     ui_heartbeat_tick = 0u;
     USER_UI_Route_Reset();
-    USER_UI_UT_Actions_Init();
+    USER_UI_UnitTestActions_Init();
     USER_UI_Core_Reset();
 }
 
@@ -201,7 +201,7 @@ void USER_UI_Task(void)
     if (ui_heartbeat_tick >= USER_UI_HEARTBEAT_PERIOD_TICKS)
     {
         ui_heartbeat_tick = 0u;
-        USER_LBB_LED_On(LED0, USER_UI_HEARTBEAT_ON_TIME_MS);
+        USER_BoardIO_LED_On(LED0, USER_UI_HEARTBEAT_ON_TIME_MS);
     }
 
     route_interaction_active = USER_UI_Core_ServiceRoutePage();

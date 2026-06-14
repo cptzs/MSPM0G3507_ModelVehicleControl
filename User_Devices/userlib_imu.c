@@ -179,7 +179,7 @@ void USER_IMU_Init(bool useSysTick, IMU_Data_StructTypeDef *data_ptr, UART_Insta
     /* 注册系统滴答定时器回调函数 */
     if (useSysTick)
     {
-        USER_SYSTICK_RegisterCallback(USER_IMU_Comm_Routine);
+        USER_SysTick_RegisterCallback(USER_IMU_Comm_Routine);
     }
 
     /*注册串口DMA发送中断完成回调函数*/
@@ -196,7 +196,7 @@ void USER_IMU_Init(bool useSysTick, IMU_Data_StructTypeDef *data_ptr, UART_Insta
  * @brief 推送 IMU 指令至发送队列。
  * @param order 指令序号。
  */
-void USER_IMU_CMD_Set(uint8_t order)
+void USER_IMU_SetCommand(uint8_t order)
 {
     if (!imu_config.initialized)
     {
@@ -229,12 +229,12 @@ float USER_IMU_NormalizeYaw(float angle)
 }
 
 /**
- * @brief 设置 IMU 指令（USER_IMU_CMD_Set 的兼容性入口）。
+ * @brief 设置 IMU 指令（USER_IMU_SetCommand 的兼容性入口）。
  * @param order 指令枚举值 (IMU_ODR_READDATA / IMU_ODR_SETANGREF / IMU_ODR_SETYAWREF)。
  */
 void USER_IMU_SetOrder(uint8_t order)
 {
-    USER_IMU_CMD_Set(order);
+    USER_IMU_SetCommand(order);
 }
 
 /**
@@ -505,7 +505,7 @@ void USER_IMU_Comm_Routine(void)
             USER_UART_Abort_Receive(imu_config.uart_channel);
 
             /* 记录串口接收到的字节数 */
-            imu_config.recieved_bytes = USER_UART_GetRecievedBytes_DMA(imu_config.uart_channel);
+            imu_config.recieved_bytes = USER_UART_GetReceivedBytes_DMA(imu_config.uart_channel);
 
             /* 串口接收完成标志清零 */
             imu_config.recieved = false;

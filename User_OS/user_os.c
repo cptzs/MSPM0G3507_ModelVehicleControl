@@ -29,9 +29,15 @@ typedef struct
 static volatile uint32_t os_tick = 0u;
 static USER_OS_TaskControlBlock_t os_tasks[USER_OS_MAX_TASKS];
 static uint8_t os_task_count = 0u;
+static uint32_t os_load_window_start_tick = 0u;
+static uint32_t os_load_idle_us = 0u;
+static uint16_t os_cpu_load_permille = 0u;
 
 /**
  * @brief 判断 now 是否已经到达 target，支持 uint32_t 回绕。
+ * @param now 当前 tick 计数。
+ * @param target 目标 tick 计数。
+ * @retval true now 已经到达或超过 target，false 还未到达。
  */
 static bool USER_OS_TickReached(uint32_t now, uint32_t target)
 {
@@ -39,7 +45,10 @@ static bool USER_OS_TickReached(uint32_t now, uint32_t target)
 }
 
 /**
- * @brief 判断 candidate 是否比 selected 更早释放，支持 uint32_t 回绕。
+ * @brief 判断 candidate 的释放时间是否早于 selected，支持 uint32_t 回绕。
+ * @param candidate 待比较的任务释放 tick。
+ * @param selected 当前选中任务的释放 tick。
+ * @retval true candidate 的释放时间早于 selected，false 否则。
  */
 static bool USER_OS_IsEarlierRelease(uint32_t candidate, uint32_t selected)
 {
@@ -91,7 +100,57 @@ static uint32_t USER_OS_GetTimeUs(void)
 }
 
 /**
- * @brief 选择当前已经到期且优先级最高的任务。
+ * @brief 获取当前时间戳的近似值，不等待 SysTick 稳定。
+ *
+ * 该函数在无法保证 SysTick 稳定的上下文中调用，如空闲等待期间。
+ * 可能存在误差，但足够用于统计空闲时间长度，避免在空闲等待中调用 USER_OS_GetTimeUs 导致死锁。
+ */
+static uint32_t USER_OS_GetTimeUsNoWait(void)
+{
+    uint32_t tick;
+    uint32_t systick_val;
+    uint32_t load_cycles;
+    uint32_t elapsed_cycles;
+    uint32_t cycles_per_us;
+
+    tick = os_tick;
+    systick_val = SysTick->VAL;
+    load_cycles = SysTick->LOAD + 1u;
+    if (load_cycles > systick_val)
+    {
+        elapsed_cycles = load_cycles - systick_val;
+    }
+    else
+    {
+        elapsed_cycles = 0u;
+    }
+
+    cycles_per_us = (uint32_t)(CPUCLK_FREQ / 1000000u);
+    if (cycles_per_us == 0u)
+    {
+        cycles_per_us = 1u;
+    }
+
+    return (tick * 1000u) + (elapsed_cycles / cycles_per_us);
+}
+
+static void USER_OS_RecordIdleTime(uint32_t idle_us)
+{
+    os_load_idle_us += idle_us;
+}
+
+/**
+ * @brief 从任务表中选择一个已经到期的任务执行。
+ *
+ * 遍历任务表，选择满足以下条件的任务：
+ * 1. 已使用且启用。
+ * 2. 任务函数指针非 NULL，周期非 0。
+ * 3. 当前 tick 已经到达或超过 next_release_tick。
+ *
+ * 在满足上述条件的任务中，优先级数值较小的优先执行；如果优先级相同，则选择 next_release_tick 更早的任务。
+ *
+ * @param now 当前 tick 计数。
+ * @retval 选中的任务索引，范围 0 到 os_task_count-1；如果没有到期任务，则返回 -1。
  */
 static int16_t USER_OS_SelectReadyTask(uint32_t now)
 {
@@ -132,7 +191,14 @@ static int16_t USER_OS_SelectReadyTask(uint32_t now)
 }
 
 /**
- * @brief 根据当前 tick 推进任务下一次释放时间，并统计漏调度次数。
+ * @brief 更新任务的下次释放时间。
+ *
+ * 根据当前 tick 和任务的周期，计算下次释放时间。若当前 tick 已经超过下次释放时间，
+ * 则将 next_release_tick 向前推进一个或多个周期，直到 next_release_tick 在未来。
+ * 如果需要推进多个周期，则认为任务发生了过期，增加 overrun_count 以供统计。
+ *
+ * @param tcb 任务控制块指针。
+ * @param now 当前 tick 计数。
  */
 static void USER_OS_UpdateNextRelease(USER_OS_TaskControlBlock_t *tcb, uint32_t now)
 {
@@ -171,6 +237,9 @@ void USER_OS_Init(void)
 
     os_tick = 0u;
     os_task_count = 0u;
+    os_load_window_start_tick = 0u;
+    os_load_idle_us = 0u;
+    os_cpu_load_permille = 0u;
 
     for (i = 0u; i < USER_OS_MAX_TASKS; i++)
     {
@@ -190,9 +259,15 @@ void USER_OS_Init(void)
         os_tasks[i].max_cost_us = 0u;
     }
 
-    (void)USER_SYSTICK_RegisterCallback(USER_OS_TickISR);
+    (void)USER_SysTick_RegisterCallback(USER_OS_TickISR);
 }
 
+/**
+ * @brief SysTick 中断服务程序，每 1ms 调用一次。
+ *
+ * 该函数由 SysTick 定时器中断触发，负责增加系统 tick 计数。
+ * 由于 os_tick 是 volatile 类型，确保在中断和主循环之间正确同步。
+ */
 void USER_OS_TickISR(void)
 {
     os_tick++;
@@ -241,11 +316,84 @@ uint8_t USER_OS_RegisterTask(const char *name,
 }
 
 /**
- * @brief 调度器主循环：执行所有到期任务。
+ * @brief 检查当前是否存在已经到期的任务。
+ */
+bool USER_OS_HasReadyTask(void)
+{
+    return (USER_OS_SelectReadyTask(USER_OS_GetTick()) >= 0);
+}
+
+/**
+ * @brief 更新 CPU 负载统计。
+ *
+ * 基于 1 秒窗口，记录空闲时间占比计算负载百分比。每次调用 USER_OS_Run 后更新一次，
+ * 确保负载统计反映实际运行情况。
+ *
+ * @param now_tick 当前 tick 计数。
+ */
+static void USER_OS_UpdateCpuLoad(uint32_t now_tick)
+{
+    uint32_t window_ms;
+    uint32_t window_us;
+    uint32_t idle_us;
+    uint32_t load;
+
+    window_ms = now_tick - os_load_window_start_tick;
+    if (window_ms < 1000u)
+    {
+        return;
+    }
+
+    window_us = window_ms * 1000u;
+    idle_us = (os_load_idle_us > window_us) ? window_us : os_load_idle_us;
+    if (window_us == 0u)
+    {
+        os_cpu_load_permille = 0u;
+    }
+    else
+    {
+        load = ((window_us - idle_us) * 1000u) / window_us;
+        os_cpu_load_permille = (load > 1000u) ? 1000u : (uint16_t)load;
+    }
+
+    os_load_idle_us = 0u;
+    os_load_window_start_tick = now_tick;
+}
+
+/**
+ * @brief 进入空闲等待状态，直到下一个中断唤醒。
+ *
+ * 在没有到期任务时调用，记录空闲时间用于 CPU 负载统计。
+ */
+void USER_OS_IdleWait(void)
+{
+    uint32_t idle_start_us;
+    uint32_t idle_finish_us;
+
+    __disable_irq();
+    if (!USER_OS_HasReadyTask())
+    {
+        idle_start_us = USER_OS_GetTimeUsNoWait();
+        __WFI();
+        __enable_irq();
+        idle_finish_us = USER_OS_GetTimeUs();
+        USER_OS_RecordIdleTime(idle_finish_us - idle_start_us);
+        USER_OS_UpdateCpuLoad(USER_OS_GetTick());
+    }
+    else
+    {
+        __enable_irq();
+    }
+}
+
+/**
+ * @brief 调度器主循环：执行一个到期任务。
  * @details 每个 1ms tick 遍历任务表，按优先级升序执行到期任务。
  *          每个任务执行前后记录 us 级时间戳用于耗时统计。
+ * @retval true 本次调用执行了一个任务。
+ * @retval false 当前没有到期任务。
  */
-void USER_OS_Run(void)
+bool USER_OS_Run(void)
 {
     int16_t task_index;
     uint32_t now;
@@ -260,7 +408,7 @@ void USER_OS_Run(void)
     task_index = USER_OS_SelectReadyTask(now);
     if (task_index < 0)
     {
-        return;
+        return false;
     }
 
     tcb = &os_tasks[task_index];
@@ -289,8 +437,29 @@ void USER_OS_Run(void)
     }
 
     tcb->run_count++;
+    USER_OS_UpdateCpuLoad(finish_tick);
+    return true;
 }
 
+/**
+ * @brief 获取当前 CPU 负载百分比，单位千分之一。
+ *
+ * 负载统计基于 1 秒窗口，记录空闲时间占比计算负载百分比。
+ * 每次调用 USER_OS_Run 后更新一次，确保负载统计反映实际运行情况。
+ * @retval 当前 CPU 负载，范围 0 到 1000 (0% 到 100%)。
+ */
+uint16_t USER_OS_GetCpuLoadPermille(void)
+{
+    USER_OS_UpdateCpuLoad(USER_OS_GetTick());
+    return os_cpu_load_permille;
+}
+
+/**
+ * @brief 启用或禁用指定任务。
+ * @param task_id 任务 ID。
+ * @param enabled true 启用任务，false 禁用任务。
+ * @retval true 成功，false 任务 ID 无效。
+ */
 bool USER_OS_SetTaskEnabled(uint8_t task_id, bool enabled)
 {
     if ((task_id >= os_task_count) || (!os_tasks[task_id].used))
@@ -306,6 +475,12 @@ bool USER_OS_SetTaskEnabled(uint8_t task_id, bool enabled)
     return true;
 }
 
+/**
+ * @brief 获取指定任务的统计信息。
+ * @param task_id 任务 ID。
+ * @param stats 输出参数，返回任务统计信息。
+ * @retval true 成功，false 任务 ID 无效或 stats 参数为 NULL。
+ */
 bool USER_OS_GetTaskStats(uint8_t task_id, USER_OS_TaskStats_t *stats)
 {
     USER_OS_TaskControlBlock_t *tcb;
@@ -332,6 +507,11 @@ bool USER_OS_GetTaskStats(uint8_t task_id, USER_OS_TaskStats_t *stats)
     return true;
 }
 
+/**
+ * @brief 清除指定任务的最大耗时统计。
+ * @param task_id 任务 ID。
+ * @retval true 成功，false 任务 ID 无效。
+ */
 bool USER_OS_ClearTaskMaxCost(uint8_t task_id)
 {
     if ((task_id >= os_task_count) || (!os_tasks[task_id].used))
@@ -343,6 +523,9 @@ bool USER_OS_ClearTaskMaxCost(uint8_t task_id)
     return true;
 }
 
+/**
+ * @brief 清除所有任务的最大耗时统计。
+ */
 void USER_OS_ClearAllTaskMaxCost(void)
 {
     uint8_t i;
@@ -356,11 +539,19 @@ void USER_OS_ClearAllTaskMaxCost(void)
     }
 }
 
+/**
+ * @brief 获取当前注册的任务数量。
+ * @retval 当前任务数量，范围 0 到 USER_OS_MAX_TASKS。
+ */
 uint8_t USER_OS_GetTaskCount(void)
 {
     return os_task_count;
 }
 
+/**
+ * @brief 获取当前系统 tick 计数。
+ * @retval 当前 tick 计数，单位 ms。
+ */
 uint32_t USER_OS_GetTick(void)
 {
     return os_tick;

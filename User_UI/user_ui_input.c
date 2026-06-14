@@ -37,7 +37,7 @@ USER_UI_KeyEvent_t USER_UI_ConvertButtonEvent(USER_LBB_ButtonEvent_t event)
  */
 USER_UI_KeyEvent_t USER_UI_ConsumeButtonEvent(Button_t button)
 {
-    return USER_UI_ConvertButtonEvent(USER_LBB_Button_ConsumeEvent(button));
+    return USER_UI_ConvertButtonEvent(USER_BoardIO_Button_ConsumeEvent(button));
 }
 
 /**

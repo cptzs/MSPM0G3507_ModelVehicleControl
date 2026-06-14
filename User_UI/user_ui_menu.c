@@ -30,6 +30,7 @@ static const USER_UI_MenuItem_t ui_menu_service_items[] = {
     {"Motor PID Mon", PAGE_MOTOR, USER_UI_MENU_ITEM_ENABLED},
     {"Servo Manual", PAGE_SERVO, USER_UI_MENU_ITEM_ENABLED},
     {"Thread Stats", PAGE_THREADS, USER_UI_MENU_ITEM_ENABLED},
+    {"SysInfo", PAGE_SYSINFO, USER_UI_MENU_ITEM_ENABLED},
 };
 
 static const USER_UI_MenuItem_t ui_menu_setting_items[] = {
@@ -49,13 +50,13 @@ static const USER_UI_MenuCategory_t ui_menu_categories[] = {
 
 static void USER_UI_Menu_ClearLine(uint8_t row)
 {
-    USER_OLED_putString(row, 0u, "                     ", USER_UI_MENU_TEXT_WIDTH);
+    USER_OLED_PutString(row, 0u, "                     ", USER_UI_MENU_TEXT_WIDTH);
 }
 
 static void USER_UI_Menu_DrawLabel(uint8_t row, const char *label)
 {
     USER_UI_Menu_ClearLine(row);
-    USER_OLED_putString(row, 2u, label, 17u);
+    USER_OLED_PutString(row, 2u, label, 17u);
 }
 
 const USER_UI_MenuCategory_t *USER_UI_Menu_GetCategory(uint8_t category_index)
@@ -175,10 +176,10 @@ void USER_UI_Menu_DrawMain(uint8_t selected_category)
     uint8_t i;
 
     USER_OLED_CleanScreen();
-    USER_OLED_putString(0u, 0u, "MAIN MENU       ", 16u);
-    USER_OLED_putUI16(0u, 16u, (uint16_t)(selected_category + 1u), 1u);
-    USER_OLED_putString(0u, 17u, "/", 1u);
-    USER_OLED_putUI16(0u, 18u, USER_UI_Menu_GetCategoryCount(), 1u);
+    USER_OLED_PutString(0u, 0u, "MAIN MENU       ", 16u);
+    USER_OLED_PutUI16(0u, 16u, (uint16_t)(selected_category + 1u), 1u);
+    USER_OLED_PutString(0u, 17u, "/", 1u);
+    USER_OLED_PutUI16(0u, 18u, USER_UI_Menu_GetCategoryCount(), 1u);
 
     for (i = 0u; i < USER_UI_Menu_GetCategoryCount(); i++)
     {
@@ -186,11 +187,11 @@ void USER_UI_Menu_DrawMain(uint8_t selected_category)
         USER_UI_Menu_DrawLabel((uint8_t)(i + 1u), (category == NULL) ? "" : category->title);
         if (i == selected_category)
         {
-            USER_OLED_putString((uint8_t)(i + 1u), 0u, ">", 1u);
+            USER_OLED_PutString((uint8_t)(i + 1u), 0u, ">", 1u);
         }
     }
 
-    USER_OLED_putString(7u, 0u, "UP/DN   ENT:OPEN", 16u);
+    USER_OLED_PutString(7u, 0u, "UP/DN   ENT:OPEN", 16u);
 }
 
 void USER_UI_Menu_DrawSub(uint8_t selected_category, uint8_t selected_item)
@@ -213,10 +214,10 @@ void USER_UI_Menu_DrawSub(uint8_t selected_category, uint8_t selected_item)
         top = (uint8_t)(selected_item - USER_UI_MENU_VISIBLE_ITEMS + 1u);
     }
 
-    USER_OLED_putString(0u, 0u, category->title, 13u);
-    USER_OLED_putUI16(0u, 14u, (uint16_t)(selected_item + 1u), 1u);
-    USER_OLED_putString(0u, 15u, "/", 1u);
-    USER_OLED_putUI16(0u, 16u, item_count, 1u);
+    USER_OLED_PutString(0u, 0u, category->title, 13u);
+    USER_OLED_PutUI16(0u, 14u, (uint16_t)(selected_item + 1u), 1u);
+    USER_OLED_PutString(0u, 15u, "/", 1u);
+    USER_OLED_PutUI16(0u, 16u, item_count, 1u);
 
     for (row = 0u; row < USER_UI_MENU_VISIBLE_ITEMS; row++)
     {
@@ -230,27 +231,27 @@ void USER_UI_Menu_DrawSub(uint8_t selected_category, uint8_t selected_item)
             continue;
         }
 
-        USER_OLED_putString(oled_row, 2u, item->label, 15u);
+        USER_OLED_PutString(oled_row, 2u, item->label, 15u);
         if ((item->flags & USER_UI_MENU_ITEM_PLACEHOLDER) != 0u)
         {
-            USER_OLED_putString(oled_row, 17u, "[--]", 4u);
+            USER_OLED_PutString(oled_row, 17u, "[--]", 4u);
         }
         if (item_index == selected_item)
         {
-            USER_OLED_putString(oled_row, 0u, ">", 1u);
+            USER_OLED_PutString(oled_row, 0u, ">", 1u);
         }
     }
 
     if (top > 0u)
     {
-        USER_OLED_putString(1u, 20u, "^", 1u);
+        USER_OLED_PutString(1u, 20u, "^", 1u);
     }
     if ((uint8_t)(top + USER_UI_MENU_VISIBLE_ITEMS) < item_count)
     {
-        USER_OLED_putString(6u, 20u, "v", 1u);
+        USER_OLED_PutString(6u, 20u, "v", 1u);
     }
 
-    USER_OLED_putString(7u, 0u, "ESC:BACK ENT:OPEN", 17u);
+    USER_OLED_PutString(7u, 0u, "ESC:BACK ENT:OPEN", 17u);
 }
 
 void USER_UI_Menu_DrawPlaceholder(uint8_t selected_category, uint8_t selected_item)
@@ -260,8 +261,8 @@ void USER_UI_Menu_DrawPlaceholder(uint8_t selected_category, uint8_t selected_it
     USER_OLED_CleanScreen();
     if (item != NULL)
     {
-        USER_OLED_putString(0u, 0u, item->label, 21u);
+        USER_OLED_PutString(0u, 0u, item->label, 21u);
     }
-    USER_OLED_putString(3u, 3u, "NOT IMPLEMENTED", 15u);
-    USER_OLED_putString(7u, 0u, "ESC:BACK", 8u);
+    USER_OLED_PutString(3u, 3u, "NOT IMPLEMENTED", 15u);
+    USER_OLED_PutString(7u, 0u, "ESC:BACK", 8u);
 }

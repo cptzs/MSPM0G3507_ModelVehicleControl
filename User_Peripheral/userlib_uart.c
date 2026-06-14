@@ -568,7 +568,7 @@ uint16_t USER_UART_GetSentBytes_DMA(UART_Instance uart_inst)
 
 /// @brief 获取UART实例已接收的字节数
 /// @param uart_inst UART实例
-uint16_t USER_UART_GetRecievedBytes(UART_Instance uart_inst)
+uint16_t USER_UART_GetReceivedBytes(UART_Instance uart_inst)
 {
     // 返回已接收的字节数
     return bytes_received[uart_inst];
@@ -576,7 +576,7 @@ uint16_t USER_UART_GetRecievedBytes(UART_Instance uart_inst)
 
 /// @brief 获取UART实例已DMA接收的字节数
 /// @param uart_inst UART实例
-uint16_t USER_UART_GetRecievedBytes_DMA(UART_Instance uart_inst)
+uint16_t USER_UART_GetReceivedBytes_DMA(UART_Instance uart_inst)
 {
     // 返回已接收的字节数
     return bytes_to_receive[uart_inst] - DL_DMA_getTransferSize(DMA, uart_rxdma_ch[uart_inst]);

@@ -351,7 +351,7 @@ static void USER_MCM_ApplyWheelSpeedCommand(float left_speed_mm_s, float right_s
 {
     const USER_STATE_Estimate_t *est;
 
-    est = USER_STATE_GetEstimate();
+    est = USER_State_GetEstimate();
 
     speed_pid[MOTOR_0_LEFT].target = MCM_SPEED_TO_ENCODER_COUNT(left_speed_mm_s);
     speed_pid[MOTOR_1_RIGHT].target = MCM_SPEED_TO_ENCODER_COUNT(right_speed_mm_s);
@@ -579,7 +579,7 @@ void USER_MCM_Task(void)
     }
 
     /* 步骤3：RUN 状态获取最新估测并派发到对应动作更新函数。 */
-    est = USER_STATE_GetEstimate();
+    est = USER_State_GetEstimate();
     if (mcm.type == USER_MCM_ACTION_STRAIGHT)
     {
         USER_MCM_UpdateStraight(est);
@@ -615,7 +615,7 @@ USER_MCM_Status_t USER_MCM_StartStraight(int32_t distance_mm, int32_t max_speed_
     }
 
     /* 步骤2：编码器可用性检查。 */
-    est = USER_STATE_GetEstimate();
+    est = USER_State_GetEstimate();
     if (est->distance_valid == 0u)
     {
         return USER_MCM_STATUS_ENCODER_ERROR;
@@ -665,7 +665,7 @@ USER_MCM_Status_t USER_MCM_StartSpin(int32_t relative_angle_deg, int32_t max_gyr
     }
 
     /* 步骤2：IMU 航向可用性检查。 */
-    est = USER_STATE_GetEstimate();
+    est = USER_State_GetEstimate();
     if (est->yaw_valid == 0u)
     {
         return USER_MCM_STATUS_IMU_ERROR;

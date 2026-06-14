@@ -72,7 +72,7 @@ void USER_Modbus_Comm_Routine()
     if (rx_await_time_countdown > 0)
     {
         // 读取当前串口接收字节数
-        rx_bytes = USER_UART_GetRecievedBytes_DMA(channel_bck);
+        rx_bytes = USER_UART_GetReceivedBytes_DMA(channel_bck);
         if (rx_bytes_old != rx_bytes)
         {
             // 如果接收字节数变化，重置接收超时倒计时
@@ -97,7 +97,7 @@ void USER_Modbus_Comm_Routine()
         // 停止串口接收
         USER_UART_Abort_Receive(channel_bck);
         // 记录接收的字节数
-        rx_bytes = USER_UART_GetRecievedBytes_DMA(channel_bck);
+        rx_bytes = USER_UART_GetReceivedBytes_DMA(channel_bck);
         // 如果接收的字节数大于0
         if (rx_bytes > 0)
         {
@@ -596,7 +596,7 @@ void _modbus_slave_init(Modbus_Config_StructTypeDef *config)
     if (config->userSysTick)
     {
         // 注册循环通信处理函数
-        USER_SYSTICK_RegisterCallback(USER_Modbus_Comm_Routine);
+        USER_SysTick_RegisterCallback(USER_Modbus_Comm_Routine);
     }
 
     // 注册串口发送完成回调函数

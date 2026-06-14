@@ -111,7 +111,7 @@ bool USER_UART_Abort_Receive(UART_Instance uart_inst);
 /// @brief 获取UART实例已接收的字节数
 /// @param uart_inst UART实例
 /// @return 已接收的字节数
-uint16_t USER_UART_GetRecievedBytes(UART_Instance uart_inst);
+uint16_t USER_UART_GetReceivedBytes(UART_Instance uart_inst);
 
 /// @brief 获取UART实例已发送的字节数
 /// @param uart_inst UART实例
@@ -126,7 +126,7 @@ uint16_t USER_UART_GetSentBytes_DMA(UART_Instance uart_inst);
 /// @brief 获取UART实例DMA已接收的字节数
 /// @param uart_inst UART实例
 /// @return 已接收的字节数
-uint16_t USER_UART_GetRecievedBytes_DMA(UART_Instance uart_inst);
+uint16_t USER_UART_GetReceivedBytes_DMA(UART_Instance uart_inst);
 
 /// @brief 注册UART中断回调函数
 /// @param uart_inst UART实例

@@ -86,7 +86,7 @@ typedef struct
 /**
  * @brief 初始化状态估测器，并快照用于速度计算的计数器。
  */
-void USER_STATE_Init(void);
+void USER_State_Init(void);
 
 /**
  * @brief 设置状态估测器使用的估测方法。
@@ -94,12 +94,12 @@ void USER_STATE_Init(void);
  * 尚未实现的高级方法当前会自动回落到默认直通估测器，但保留函数入口，
  * 便于后续接入加权融合、Kalman 或 EKF 时不修改 MCM 调用方式。
  */
-void USER_STATE_SetEstimatorMethod(USER_STATE_Source_t method);
+void USER_State_SetEstimatorMethod(USER_STATE_Source_t method);
 
 /**
  * @brief 返回当前请求使用的估测方法。
  */
-USER_STATE_Source_t USER_STATE_GetEstimatorMethod(void);
+USER_STATE_Source_t USER_State_GetEstimatorMethod(void);
 
 /**
  * @brief 刷新统一状态估计。
@@ -111,6 +111,6 @@ void USER_State_Task(void);
 /**
  * @brief 返回最新估计结果的只读指针。
  */
-const USER_STATE_Estimate_t *USER_STATE_GetEstimate(void);
+const USER_STATE_Estimate_t *USER_State_GetEstimate(void);
 
 #endif /* USERAPP_STATE_ESTIMATOR_H */

@@ -100,20 +100,20 @@ extern uint16_t button_repeat_time[BUTTON_COUNT]; /* 长按重复计时 */
 
 /// @brief 初始化LED、蜂鸣器和按钮
 /// @details 该函数会初始化LED、蜂鸣器和按钮的GPIO端口，并设置初始状态
-void USER_LBB_Init(void);
+void USER_BoardIO_Init(void);
 
 // LED控制内联函数
 /// @brief 打开指定LED
 /// @param led LED编号（使用LED_t枚举）
 /// @param ms 持续时间，单位为毫秒
-static inline void USER_LBB_LED_On(LED_t led, uint16_t ms)
+static inline void USER_BoardIO_LED_On(LED_t led, uint16_t ms)
 {
     led_countdown[led] = ms;
 }
 
 /// @brief 关闭指定LED
 /// @param led LED编号（使用LED_t枚举）
-static inline void USER_LBB_LED_Off(LED_t led)
+static inline void USER_BoardIO_LED_Off(LED_t led)
 {
     led_countdown[led] = 0;
 }
@@ -121,7 +121,7 @@ static inline void USER_LBB_LED_Off(LED_t led)
 /// @brief 读取指定LED的点亮倒计时
 /// @param led LED编号（使用LED_t枚举）
 /// @return LED的点亮倒计时，单位为毫秒
-static inline uint16_t USER_LBB_LED_ReadCountdown(LED_t led)
+static inline uint16_t USER_BoardIO_LED_ReadCountdown(LED_t led)
 {
     return led_countdown[led];
 }
@@ -129,14 +129,14 @@ static inline uint16_t USER_LBB_LED_ReadCountdown(LED_t led)
 // 蜂鸣器控制内联函数
 /// @brief 打开蜂鸣器
 /// @param ms 持续时间，单位为毫秒
-static inline void USER_LBB_Buzzer_On(uint16_t ms)
+static inline void USER_BoardIO_Buzzer_On(uint16_t ms)
 {
     buzzer_countdown = ms;
 }
 
 /// @brief 关闭蜂鸣器
 /// @note 关闭蜂鸣器时，倒计时将被清零
-static inline void USER_LBB_Buzzer_Off(void)
+static inline void USER_BoardIO_Buzzer_Off(void)
 {
     buzzer_countdown = 0;
 }
@@ -148,33 +148,33 @@ static inline void USER_LBB_Buzzer_Off(void)
  * @param button 按钮枚举值。
  * @return 事件类型；无事件时返回 USER_LBB_BUTTON_EVENT_NONE。
  */
-USER_LBB_ButtonEvent_t USER_LBB_Button_ConsumeEvent(Button_t button);
+USER_LBB_ButtonEvent_t USER_BoardIO_Button_ConsumeEvent(Button_t button);
 
 /// @brief 获取未消费短按次数。
-uint16_t USER_LBB_Button_GetPendingShortCount(Button_t button);
+uint16_t USER_BoardIO_Button_GetPendingShortCount(Button_t button);
 
 /// @brief 获取未消费长按首次触发次数。
-uint16_t USER_LBB_Button_GetPendingLongCount(Button_t button);
+uint16_t USER_BoardIO_Button_GetPendingLongCount(Button_t button);
 
 /// @brief 获取未消费长按重复触发次数。
-uint16_t USER_LBB_Button_GetPendingLongRepeatCount(Button_t button);
+uint16_t USER_BoardIO_Button_GetPendingLongRepeatCount(Button_t button);
 
 /// @brief 消费一个短按事件。
-bool USER_LBB_Button_ConsumeShort(Button_t button);
+bool USER_BoardIO_Button_ConsumeShort(Button_t button);
 
 /// @brief 消费一个长按首次触发事件。
-bool USER_LBB_Button_ConsumeLong(Button_t button);
+bool USER_BoardIO_Button_ConsumeLong(Button_t button);
 
 /// @brief 消费一个长按重复触发事件。
-bool USER_LBB_Button_ConsumeLongRepeat(Button_t button);
+bool USER_BoardIO_Button_ConsumeLongRepeat(Button_t button);
 
 /// @brief 获取按钮调试统计信息。
-bool USER_LBB_Button_GetStats(Button_t button, USER_LBB_ButtonStats_t *stats);
+bool USER_BoardIO_Button_GetStats(Button_t button, USER_LBB_ButtonStats_t *stats);
 
 /// @brief 清空指定按钮的事件计数和消费计数。
-bool USER_LBB_Button_ClearStats(Button_t button);
+bool USER_BoardIO_Button_ClearStats(Button_t button);
 
 /// @brief 清空全部按钮的事件计数和消费计数。
-void USER_LBB_Button_ClearAllStats(void);
+void USER_BoardIO_Button_ClearAllStats(void);
 
 #endif // USERLIB_LBB_H

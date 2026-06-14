@@ -1,4 +1,4 @@
-﻿/**
+/**
  ******************************************************************************
  * @file    userlib_oled.h
  * @brief   OLED 12864 驱动库头文件 - 适用于TI MSPM0G3507
@@ -106,13 +106,13 @@ void USER_OLED_InvertDisplay(bool invert);
 /// @param column 列号(0-20)
 /// @param str 字符串指针
 /// @param length 字符串长度(最大21字符)
-void USER_OLED_putString(uint8_t row, uint8_t column, const char *string, uint8_t length);
+void USER_OLED_PutString(uint8_t row, uint8_t column, const char *string, uint8_t length);
 
 /// @brief 在指定位置显示字符
 /// @param row 行号(0-7)
 /// @param column 列号(0-20)
 /// @param ch 字符
-void USER_OLED_putChar(uint8_t row, uint8_t column, char ch);
+void USER_OLED_PutChar(uint8_t row, uint8_t column, char ch);
 
 /*******************************数值显示函数*******************************/
 /// @brief 在指定位置以HEX格式显示16位无符号整数
@@ -120,21 +120,21 @@ void USER_OLED_putChar(uint8_t row, uint8_t column, char ch);
 /// @param column 列号(0-20)
 /// @param number 16位整数 (0-65535)
 /// @param length 显示长度 (1-4字符)
-void USER_OLED_putX16(uint8_t row, uint8_t column, uint16_t number, uint8_t length);
+void USER_OLED_PutX16(uint8_t row, uint8_t column, uint16_t number, uint8_t length);
 
 /// @brief 在指定位置以十进制格式显示16位无符号整数
 /// @param row 行号(0-7)
 /// @param column 列号(0-20)
 /// @param number 16位无符号整数 (0-65535)
 /// @param length 显示长度 (1-5字符)
-void USER_OLED_putUI16(uint8_t row, uint8_t column, uint16_t number, uint8_t length);
+void USER_OLED_PutUI16(uint8_t row, uint8_t column, uint16_t number, uint8_t length);
 
 /// @brief 在指定位置以十进制格式显示16位有符号整数
 /// @param row 行号(0-7)
 /// @param column 列号(0-20)
 /// @param number 16位有符号整数 (-32768到32767)
 /// @param length 显示长度 (2-6字符，包括符号位)
-void USER_OLED_putI16(uint8_t row, uint8_t column, int16_t number, uint8_t length);
+void USER_OLED_PutI16(uint8_t row, uint8_t column, int16_t number, uint8_t length);
 
 /// @brief 在指定位置以浮点数格式显示数值
 /// @param row 行号(0-7)
@@ -142,7 +142,7 @@ void USER_OLED_putI16(uint8_t row, uint8_t column, int16_t number, uint8_t lengt
 /// @param number 浮点数
 /// @param int_length 整数部分长度 (1-5字符)
 /// @param float_length 小数部分长度 (1-5字符)
-void USER_OLED_putFloat(uint8_t row, uint8_t column, float number, uint8_t int_length, uint8_t float_length);
+void USER_OLED_PutFloat(uint8_t row, uint8_t column, float number, uint8_t int_length, uint8_t float_length);
 
 /*******************************图形显示函数*******************************/
 /// @brief 在指定位置绘制点

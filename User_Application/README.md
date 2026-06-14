@@ -168,7 +168,7 @@ typedef struct {
 
 1. UI 路线页面（PAGE_TEMPLATE）ENTER 长按
 2. 充电进度条 2s
-3. 倒计时 2s
+3. 倒计时 1s
 4. `USER_Race_RequestStart(RACE_ROUTE_TEMPLATE)`
 5. `USER_Race_Task()` 启动 `USER_Race_TableExecutor_Start()`
 6. 调度器每 10ms 调用 `USER_Race_TableExecutor_Update()` 推进

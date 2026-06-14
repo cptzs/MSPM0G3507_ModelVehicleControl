@@ -17,7 +17,7 @@
 #include "userlib_lbb.h"
 
 /**
- * @brief OLED 显示页面枚举（注册表驱动，共 12 页）。
+ * @brief OLED 显示页面枚举（注册表驱动，共 13 页）。
  */
 typedef enum
 {
@@ -30,6 +30,7 @@ typedef enum
     PAGE_CAMERA,
     PAGE_SERVO,
     PAGE_THREADS,
+    PAGE_SYSINFO,
     PAGE_IMU_SUM,
     PAGE_TEMPLATE,
     PAGE_UNITTEST
@@ -144,6 +145,8 @@ void USER_UI_ShowThreadsPageStatic(void);
 void USER_UI_ShowThreadsPageDynamic(void);
 void USER_UI_ThreadsOnKey(Button_t key, USER_UI_KeyEvent_t event);
 void USER_UI_ThreadsOnEnter(void);
+void USER_UI_ShowSysInfoPageStatic(void);
+void USER_UI_ShowSysInfoPageDynamic(void);
 void USER_UI_ShowCameraPageStatic(void);
 void USER_UI_ShowCameraPageDynamic(void);
 void USER_UI_ShowIMUSumPageStatic(void);

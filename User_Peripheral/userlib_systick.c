@@ -18,7 +18,7 @@ void (*systick_callback[SYSTICK_CALLBACK_MAX])(void) = {0};
  * @brief 系统服务初始化。
  * @details 清空回调槽位、重置 tick 计数器。
  */
-void USER_SYSTEM_Init(void)
+void USER_System_Init(void)
 {
     memset(systick_callback, 0, sizeof(systick_callback));
     sysTick = 0;
@@ -50,7 +50,7 @@ void SysTick_Handler(void)
  * @retval true 注册成功或已存在。
  * @retval false 槽位已满或参数为空。
  */
-bool USER_SYSTICK_RegisterCallback(void (*callback)(void))
+bool USER_SysTick_RegisterCallback(void (*callback)(void))
 {
     uint16_t i;
 
@@ -89,7 +89,7 @@ bool USER_SYSTICK_RegisterCallback(void (*callback)(void))
  * @retval true 注销成功。
  * @retval false 未找到该回调或参数为空。
  */
-bool USER_SYSTICK_UnregisterCallback(void (*callback)(void))
+bool USER_SysTick_UnregisterCallback(void (*callback)(void))
 {
     uint16_t i;
 
@@ -116,7 +116,7 @@ bool USER_SYSTICK_UnregisterCallback(void (*callback)(void))
  * @brief 获取当前已注册的回调函数数量。
  * @return 已注册回调数量。
  */
-uint8_t USER_SYSTICK_GetCallbackCount(void)
+uint8_t USER_SysTick_GetCallbackCount(void)
 {
     uint8_t count;
     uint16_t i;
@@ -138,7 +138,7 @@ uint8_t USER_SYSTICK_GetCallbackCount(void)
  * @retval true 已注册。
  * @retval false 未注册或参数为空。
  */
-bool USER_SYSTICK_IsCallbackRegistered(void (*callback)(void))
+bool USER_SysTick_IsCallbackRegistered(void (*callback)(void))
 {
     uint16_t i;
 
@@ -160,7 +160,7 @@ bool USER_SYSTICK_IsCallbackRegistered(void (*callback)(void))
 /**
  * @brief 清除所有已注册的回调函数。
  */
-void USER_SYSTICK_ClearAllCallbacks(void)
+void USER_SysTick_ClearAllCallbacks(void)
 {
     memset(systick_callback, 0, sizeof(systick_callback));
 }

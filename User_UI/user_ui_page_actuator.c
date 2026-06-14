@@ -25,13 +25,13 @@ static USER_UI_ServoOwner_t s_servo_owner = SERVO_OWNER_NONE;
  */
 void USER_UI_ShowActuatorPageStatic(void)
 {
-    USER_OLED_putString(1u, 0u, "MODE MON    SEL SVO1 ", 21u);
-    USER_OLED_putString(2u, 0u, " ANG   00000    00000", 21u);
-    USER_OLED_putString(3u, 0u, " WDH   00000    00000", 21u);
-    USER_OLED_putString(4u, 0u, "STEP      1deg       ", 21u);
-    USER_OLED_putString(5u, 0u, "fERR       00.000    ", 21u);
-    USER_OLED_putString(6u, 0u, "ENT:MANUAL          ", 21u);
-    USER_OLED_putString(7u, 0u, "ESC:BACK            ", 21u);
+    USER_OLED_PutString(1u, 0u, "MODE MON    SEL SVO1 ", 21u);
+    USER_OLED_PutString(2u, 0u, " ANG   00000    00000", 21u);
+    USER_OLED_PutString(3u, 0u, " WDH   00000    00000", 21u);
+    USER_OLED_PutString(4u, 0u, "STEP      1deg       ", 21u);
+    USER_OLED_PutString(5u, 0u, "fERR       00.000    ", 21u);
+    USER_OLED_PutString(6u, 0u, "ENT:MANUAL          ", 21u);
+    USER_OLED_PutString(7u, 0u, "ESC:BACK            ", 21u);
 }
 
 /**
@@ -50,27 +50,27 @@ void USER_UI_ShowActuatorPageDynamic(void)
     switch (update_line)
     {
     case 1:
-        USER_OLED_putString(1u, 5u, s_servo_manual_mode ? "MAN" : "MON", 3u);
-        USER_OLED_putString(1u, 16u, (s_servo_selected == SERVO_0) ? "SVO1" : "SVO2", 4u);
-        USER_OLED_putString(6u, 0u, s_servo_manual_mode ? "ENT:MON             " : "ENT:MANUAL          ", 21u);
-        USER_OLED_putString(7u, 0u, s_servo_manual_mode ? "L/R:-/+  UP/DN:SEL  " : "ESC:BACK            ", 21u);
+        USER_OLED_PutString(1u, 5u, s_servo_manual_mode ? "MAN" : "MON", 3u);
+        USER_OLED_PutString(1u, 16u, (s_servo_selected == SERVO_0) ? "SVO1" : "SVO2", 4u);
+        USER_OLED_PutString(6u, 0u, s_servo_manual_mode ? "ENT:MON             " : "ENT:MANUAL          ", 21u);
+        USER_OLED_PutString(7u, 0u, s_servo_manual_mode ? "L/R:-/+  UP/DN:SEL  " : "ESC:BACK            ", 21u);
         break;
 
     case 2:
-        USER_OLED_putI16(2u, 7u, USER_SERVO_GetAngle(SERVO_0), 5u);
-        USER_OLED_putI16(2u, 16u, USER_SERVO_GetAngle(SERVO_1), 5u);
+        USER_OLED_PutI16(2u, 7u, USER_Servo_GetAngle(SERVO_0), 5u);
+        USER_OLED_PutI16(2u, 16u, USER_Servo_GetAngle(SERVO_1), 5u);
         break;
 
     case 3:
-        USER_OLED_putUI16(3u, 7u, USER_SERVO_GetWidth(SERVO_0), 5u);
-        USER_OLED_putUI16(3u, 16u, USER_SERVO_GetWidth(SERVO_1), 5u);
+        USER_OLED_PutUI16(3u, 7u, USER_Servo_GetWidth(SERVO_0), 5u);
+        USER_OLED_PutUI16(3u, 16u, USER_Servo_GetWidth(SERVO_1), 5u);
         break;
 
     case 4:
         break;
 
     case 5:
-        USER_OLED_putFloat(5u, 10u, USER_SERVO_GetFError(), 2u, 4u);
+        USER_OLED_PutFloat(5u, 10u, USER_Servo_GetFError(), 2u, 4u);
         break;
 
     default:
@@ -113,7 +113,7 @@ void USER_UI_ActuatorOnKey(Button_t key, USER_UI_KeyEvent_t event)
         }
         else
         {
-            USER_OLED_putString(6u, 0u, "BUSY ROUTE          ", 21u);
+            USER_OLED_PutString(6u, 0u, "BUSY ROUTE          ", 21u);
         }
         return;
     }
@@ -136,13 +136,13 @@ void USER_UI_ActuatorOnKey(Button_t key, USER_UI_KeyEvent_t event)
         break;
 
     case LEFT:
-        angle = USER_SERVO_GetAngle(s_servo_selected);
-        (void)USER_SERVO_SetAngle(s_servo_selected, (int16_t)(angle - 1));
+        angle = USER_Servo_GetAngle(s_servo_selected);
+        (void)USER_Servo_SetAngle(s_servo_selected, (int16_t)(angle - 1));
         break;
 
     case RIGHT:
-        angle = USER_SERVO_GetAngle(s_servo_selected);
-        (void)USER_SERVO_SetAngle(s_servo_selected, (int16_t)(angle + 1));
+        angle = USER_Servo_GetAngle(s_servo_selected);
+        (void)USER_Servo_SetAngle(s_servo_selected, (int16_t)(angle + 1));
         break;
 
     default:

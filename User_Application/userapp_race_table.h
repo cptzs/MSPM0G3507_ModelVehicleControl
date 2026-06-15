@@ -26,10 +26,14 @@ typedef enum
     USER_Race_ACTION_NONE = 0,
     USER_Race_ACTION_MOVE_DISTANCE,
     USER_Race_ACTION_ROTATE_ANGLE,
+    USER_Race_ACTION_ARC,
     USER_Race_ACTION_WAIT_MS,
     USER_Race_ACTION_STOP,
     USER_Race_ACTION_END
 } USER_Race_ActionType_t;
+
+#define USER_RACE_ACTION_FLAG_TURN_RIGHT 0x0001u
+#define USER_RACE_ACTION_FLAG_DRIVE_BACKWARD 0x0002u
 
 /**
  * @brief 路线表单行动作定义。

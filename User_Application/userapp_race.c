@@ -17,9 +17,20 @@
  */
 static const USER_Race_Action_t race_template_actions[] = {
     {USER_Race_ACTION_MOVE_DISTANCE, 500.0f, 300.0f, 3000u, 1, 0u},
-    {USER_Race_ACTION_ROTATE_ANGLE, 180.0f, 90.0f, 2500u, 2, 0u},
+    {USER_Race_ACTION_ROTATE_ANGLE, 180.0f, 90.0f, 6500u, 2, 0u},
     {USER_Race_ACTION_MOVE_DISTANCE, 500.0f, 300.0f, 3000u, 3, 0u},
-    {USER_Race_ACTION_ROTATE_ANGLE, 180.0f, 90.0f, 2500u, 4, 0u},
+    {USER_Race_ACTION_ROTATE_ANGLE, 180.0f, 90.0f, 6500u, 4, 0u},
+    {USER_Race_ACTION_END, 0.0f, 0.0f, 0u, -1, 0u},
+};
+
+/**
+ * @brief 圆弧测试路线：左前方 90°/R500，逆时针自旋 90°，前进 50 cm，顺时针自旋 180°。
+ */
+static const USER_Race_Action_t race_arc_test_actions[] = {
+    {USER_Race_ACTION_ARC, 500.0f, 90.0f, 10000u, 1, 0u},
+    {USER_Race_ACTION_ROTATE_ANGLE, 90.0f, 90.0f, 5000u, 2, 0u},
+    {USER_Race_ACTION_MOVE_DISTANCE, 500.0f, 300.0f, 3000u, 3, 0u},
+    {USER_Race_ACTION_ROTATE_ANGLE, -180.0f, 90.0f, 8000u, 4, 0u},
     {USER_Race_ACTION_END, 0.0f, 0.0f, 0u, -1, 0u},
 };
 
@@ -65,6 +76,9 @@ const char *USER_Race_GetRouteName(uint8_t race_route)
     {
     case RACE_ROUTE_TEMPLATE:
         return "Template";
+
+    case RACE_ROUTE_ARC_TEST:
+        return "ArcTest";
 
     default:
         return "Unknown";
@@ -145,14 +159,37 @@ bool USER_Race_GetCurrentAction(USER_Race_Action_t *action_ptr,
 bool USER_Race_GetTemplatePreviewAction(USER_Race_Action_t *action_ptr,
                                         uint32_t *remain_timeout_ms_ptr)
 {
+    return USER_Race_GetRoutePreviewAction(RACE_ROUTE_TEMPLATE,
+                                           action_ptr,
+                                           remain_timeout_ms_ptr);
+}
+
+bool USER_Race_GetRoutePreviewAction(uint8_t race_route,
+                                     USER_Race_Action_t *action_ptr,
+                                     uint32_t *remain_timeout_ms_ptr)
+{
+    const USER_Race_Action_t *preview_action;
+
+    switch (race_route)
+    {
+    case RACE_ROUTE_ARC_TEST:
+        preview_action = &race_arc_test_actions[0];
+        break;
+
+    case RACE_ROUTE_TEMPLATE:
+    default:
+        preview_action = &race_template_actions[0];
+        break;
+    }
+
     if (action_ptr != NULL)
     {
-        *action_ptr = race_template_actions[0];
+        *action_ptr = *preview_action;
     }
 
     if (remain_timeout_ms_ptr != NULL)
     {
-        *remain_timeout_ms_ptr = race_template_actions[0].timeout_ms;
+        *remain_timeout_ms_ptr = preview_action->timeout_ms;
     }
 
     return true;
@@ -223,6 +260,19 @@ bool USER_Race_TemplatePath(void)
                                           USER_Race_TABLE_COUNT(race_template_actions));
 }
 
+bool USER_Race_ArcTestPath(void)
+{
+    USER_Race_EnsureExecutorInit();
+    if (USER_Race_TableExecutor_IsBusy(&race_executor))
+    {
+        return false;
+    }
+
+    return !USER_Race_TableExecutor_Start(&race_executor,
+                                          race_arc_test_actions,
+                                          USER_Race_TABLE_COUNT(race_arc_test_actions));
+}
+
 /**
  * @brief 根据路线编号启动对应路线。
  * @param race_route `RaceRoute_t` 路线编号。
@@ -234,6 +284,9 @@ bool USER_Race_RunSelected(uint8_t race_route)
     {
     case RACE_ROUTE_TEMPLATE:
         return USER_Race_TemplatePath();
+
+    case RACE_ROUTE_ARC_TEST:
+        return USER_Race_ArcTestPath();
 
     default:
         USER_MCM_FreezeAllMotions();

@@ -21,6 +21,7 @@
 typedef enum
 {
     RACE_ROUTE_TEMPLATE = 0,
+    RACE_ROUTE_ARC_TEST = 1,
     RACE_ROUTE_NONE = 255
 } RaceRoute_t;
 
@@ -58,8 +59,12 @@ bool USER_Race_GetCurrentAction(USER_Race_Action_t *action_ptr,
  */
 bool USER_Race_GetTemplatePreviewAction(USER_Race_Action_t *action_ptr,
                                         uint32_t *remain_timeout_ms_ptr);
+bool USER_Race_GetRoutePreviewAction(uint8_t race_route,
+                                     USER_Race_Action_t *action_ptr,
+                                     uint32_t *remain_timeout_ms_ptr);
 
 bool USER_Race_TemplatePath(void);
+bool USER_Race_ArcTestPath(void);
 bool USER_Race_RunSelected(uint8_t race_route);
 void USER_Race_RequestStart(uint8_t race_route);
 void USER_Race_Task(void);

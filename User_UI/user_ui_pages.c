@@ -22,6 +22,7 @@ static const USER_UI_PageDef_t ui_page_table[] = {
     {PAGE_THREADS, "Threads      ", USER_UI_ShowThreadsPageStatic, USER_UI_ShowThreadsPageDynamic, USER_UI_ThreadsOnKey, USER_UI_ThreadsOnEnter, NULL, 4u},
     {PAGE_SYSINFO, "SysInfo      ", USER_UI_ShowSysInfoPageStatic, USER_UI_ShowSysInfoPageDynamic, NULL, NULL, NULL, 4u},
     {PAGE_TEMPLATE, "Template Path", USER_UI_ShowRouteStatic, USER_UI_ShowRouteDynamic, USER_UI_RouteOnKey, NULL, USER_UI_RouteOnExit, 1u},
+    {PAGE_ARC_TEST, "Arc Test    ", USER_UI_ShowRouteStatic, USER_UI_ShowRouteDynamic, USER_UI_RouteOnKey, NULL, USER_UI_RouteOnExit, 1u},
     {PAGE_UNITTEST, "UnitTest     ", USER_UI_ShowUnitTestStatic, USER_UI_ShowUnitTestDynamic, USER_UI_UnitTestOnKey, NULL, NULL, 4u},
 };
 

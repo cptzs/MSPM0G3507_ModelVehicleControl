@@ -65,11 +65,15 @@ typedef struct
     float target_abs;
     float target_signed;
     float max_rate;
+    float arc_radius_mm;
+    float arc_target_yaw_deg;
+    float arc_max_gyro_deg_s;
 
     float start_distance_mm;
     float start_x_mm;
     float start_y_mm;
     float start_yaw_deg;
+    float last_yaw_deg;
 
     float relative_distance_mm;
     float relative_yaw_deg;
@@ -93,6 +97,11 @@ static USER_MCM_Context_t mcm = {
     USER_MCM_STATUS_OK,
     1,
     1,
+    0.0f,
+    0.0f,
+    0.0f,
+    0.0f,
+    0.0f,
     0.0f,
     0.0f,
     0.0f,
@@ -296,6 +305,18 @@ static void USER_MCM_EnterRun(void)
         angle_pid.min_output = -angle_pid.max_output;
         angle_pid.deadzone = (int32_t)MCM_ROTATE_DEADZONE_DEG;
     }
+    else if (mcm.type == USER_MCM_ACTION_ARC)
+    {
+        distance_pid.target = USER_MCM_DistanceToOdometerEncoderCount((int32_t)mcm.target_signed);
+        distance_pid.max_output = USER_MCM_SpeedToEncoderCount((int32_t)mcm.max_rate);
+        distance_pid.min_output = -distance_pid.max_output;
+        distance_pid.deadzone = USER_MCM_DistanceToOdometerEncoderCount((int32_t)MCM_LINEAR_DONE_DEADBAND_MM);
+
+        angle_pid.target = (int32_t)mcm.arc_target_yaw_deg;
+        angle_pid.max_output = (int32_t)mcm.arc_max_gyro_deg_s;
+        angle_pid.min_output = -angle_pid.max_output;
+        angle_pid.deadzone = (int32_t)MCM_ROTATE_DEADZONE_DEG;
+    }
 
     /* 步骤3：初始化规划器和保护计时。 */
     mcm.profile_rate = 0.0f;
@@ -480,6 +501,7 @@ static void USER_MCM_UpdateStraight(const USER_STATE_Estimate_t *est)
  */
 static void USER_MCM_UpdateSpin(const USER_STATE_Estimate_t *est)
 {
+    float yaw_delta_deg;
     float reference_angle_deg;
     float angle_error_deg;
     float omega_cmd_deg_s;
@@ -493,7 +515,9 @@ static void USER_MCM_UpdateSpin(const USER_STATE_Estimate_t *est)
     }
 
     /* 步骤2：计算相对航向、角度进度和剩余角度。 */
-    mcm.relative_yaw_deg = USER_MCM_AngleDifference(est->yaw_deg, mcm.start_yaw_deg);
+    yaw_delta_deg = USER_MCM_AngleDifference(est->yaw_deg, mcm.last_yaw_deg);
+    mcm.relative_yaw_deg += yaw_delta_deg;
+    mcm.last_yaw_deg = est->yaw_deg;
     mcm.progress = (float)mcm.spin_dir * mcm.relative_yaw_deg;
     mcm.remaining = mcm.target_abs - mcm.progress;
     if (mcm.remaining < 0.0f)
@@ -552,6 +576,106 @@ static void USER_MCM_UpdateSpin(const USER_STATE_Estimate_t *est)
 }
 
 /**
+ * @brief 更新圆弧行驶动作。
+ * @param est 最新状态估计。
+ */
+static void USER_MCM_UpdateArc(const USER_STATE_Estimate_t *est)
+{
+    float reference_distance_mm;
+    float reference_yaw_deg;
+    float distance_error_mm;
+    float yaw_error_deg;
+    float center_speed_mm_s;
+    float omega_cmd_deg_s;
+    float wheel_delta_mm_s;
+    float left_speed_mm_s;
+    float right_speed_mm_s;
+
+    if ((est->distance_valid == 0u) ||
+        (est->yaw_valid == 0u) ||
+        (est->velocity_valid == 0u))
+    {
+        USER_MCM_Fault(USER_MCM_STATUS_ENCODER_ERROR);
+        return;
+    }
+
+    mcm.relative_distance_mm = est->distance_mm - mcm.start_distance_mm;
+    mcm.relative_yaw_deg = USER_MCM_AngleDifference(est->yaw_deg, mcm.start_yaw_deg);
+    mcm.progress = (float)mcm.drive_dir * mcm.relative_distance_mm;
+    mcm.remaining = mcm.target_abs - mcm.progress;
+    if (mcm.remaining < 0.0f)
+    {
+        mcm.remaining = 0.0f;
+    }
+
+    if (MCM_ELAPSED_MS(mcm.start_tick) > mcm.timeout_ms)
+    {
+        USER_MCM_Fault(USER_MCM_STATUS_TIMEOUT);
+        return;
+    }
+    if ((mcm.remaining > MCM_LINEAR_DONE_DEADBAND_MM) &&
+        (mcm.progress > (mcm.last_progress + MCM_DISTANCE_PROGRESS_DEADBAND_MM)))
+    {
+        mcm.last_progress = mcm.progress;
+        mcm.progress_tick = sysTick;
+    }
+    else if ((mcm.remaining > MCM_LINEAR_DONE_DEADBAND_MM) &&
+             (MCM_ELAPSED_MS(mcm.progress_tick) > MCM_NO_PROGRESS_TIMEOUT_MS))
+    {
+        USER_MCM_Fault(USER_MCM_STATUS_NO_PROGRESS);
+        return;
+    }
+
+    USER_MCM_UpdateProfile(MCM_LINEAR_ACCEL_MM_S2, MCM_LINEAR_DECEL_MM_S2);
+    reference_distance_mm = (float)mcm.drive_dir * mcm.reference_progress;
+    reference_yaw_deg = (float)(mcm.drive_dir * mcm.spin_dir) *
+                        (mcm.reference_progress / mcm.arc_radius_mm) *
+                        (180.0f / MCM_PI);
+    distance_error_mm = reference_distance_mm - mcm.relative_distance_mm;
+    yaw_error_deg = reference_yaw_deg - mcm.relative_yaw_deg;
+
+    center_speed_mm_s = (float)mcm.drive_dir * mcm.profile_rate +
+                        MCM_LINEAR_POSITION_KP * distance_error_mm;
+    MCM_CLAMP_F(center_speed_mm_s, -mcm.max_rate, mcm.max_rate);
+
+    omega_cmd_deg_s = ((center_speed_mm_s / mcm.arc_radius_mm) *
+                       (180.0f / MCM_PI) *
+                       (float)mcm.spin_dir) +
+                      MCM_ROTATE_ANGLE_KP * yaw_error_deg;
+    MCM_CLAMP_F(omega_cmd_deg_s, -mcm.arc_max_gyro_deg_s, mcm.arc_max_gyro_deg_s);
+
+    wheel_delta_mm_s = omega_cmd_deg_s * VEHICLE_TRACK_WIDTH_MM * 0.5f * MCM_PI / 180.0f;
+    left_speed_mm_s = center_speed_mm_s - wheel_delta_mm_s;
+    right_speed_mm_s = center_speed_mm_s + wheel_delta_mm_s;
+    MCM_CLAMP_F(left_speed_mm_s, -mcm.max_rate, mcm.max_rate);
+    MCM_CLAMP_F(right_speed_mm_s, -mcm.max_rate, mcm.max_rate);
+
+    distance_pid.current = USER_MCM_DistanceToOdometerEncoderCount((int32_t)mcm.relative_distance_mm);
+    distance_pid.error = distance_pid.target - distance_pid.current;
+    distance_pid.output = MCM_SPEED_TO_ENCODER_COUNT(center_speed_mm_s);
+    angle_pid.current = (int32_t)mcm.relative_yaw_deg;
+    angle_pid.error = angle_pid.target - angle_pid.current;
+    angle_pid.output = (int32_t)omega_cmd_deg_s;
+    USER_MCM_ApplyWheelSpeedCommand(left_speed_mm_s, right_speed_mm_s);
+
+    if ((MCM_ABS_F(mcm.target_signed - mcm.relative_distance_mm) <= MCM_LINEAR_DONE_DEADBAND_MM) &&
+        (MCM_ABS_F(mcm.arc_target_yaw_deg - mcm.relative_yaw_deg) <= MCM_ROTATE_DEADZONE_DEG) &&
+        (MCM_ABS_F(est->v_mm_s) <= MCM_LINEAR_STOP_SPEED_MM_S) &&
+        (MCM_ABS_F(est->omega_deg_s) <= MCM_ROTATE_STOP_GYRO_DEG_S))
+    {
+        mcm.finish_hold_count++;
+        if (mcm.finish_hold_count >= MCM_FINISH_HOLD_CYCLES)
+        {
+            USER_MCM_Done();
+        }
+    }
+    else
+    {
+        mcm.finish_hold_count = 0u;
+    }
+}
+
+/**
  * @brief MCM 主调度任务，每个控制周期由上层调用一次。
  *
  * 根据当前状态机状态分发：
@@ -587,6 +711,10 @@ void USER_MCM_Task(void)
     else if (mcm.type == USER_MCM_ACTION_SPIN)
     {
         USER_MCM_UpdateSpin(est);
+    }
+    else if (mcm.type == USER_MCM_ACTION_ARC)
+    {
+        USER_MCM_UpdateArc(est);
     }
     else
     {
@@ -634,6 +762,7 @@ USER_MCM_Status_t USER_MCM_StartStraight(int32_t distance_mm, int32_t max_speed_
     mcm.start_x_mm = est->x_mm;
     mcm.start_y_mm = est->y_mm;
     mcm.start_yaw_deg = est->yaw_deg;
+    mcm.last_yaw_deg = est->yaw_deg;
     mcm.relative_distance_mm = 0.0f;
     mcm.relative_yaw_deg = 0.0f;
     mcm.progress = 0.0f;
@@ -684,6 +813,7 @@ USER_MCM_Status_t USER_MCM_StartSpin(int32_t relative_angle_deg, int32_t max_gyr
     mcm.start_x_mm = est->x_mm;
     mcm.start_y_mm = est->y_mm;
     mcm.start_yaw_deg = est->yaw_deg;
+    mcm.last_yaw_deg = est->yaw_deg;
     mcm.relative_distance_mm = 0.0f;
     mcm.relative_yaw_deg = 0.0f;
     mcm.progress = 0.0f;
@@ -712,14 +842,60 @@ USER_MCM_Status_t USER_MCM_StartArc(int32_t radius_mm,
                                     int32_t max_gyro_deg_s)
 {
     /* 步骤1：预留接口，参数暂不消费，直接返回未实现。 */
-    (void)radius_mm;
-    (void)arc_angle_deg;
-    (void)turn_dir;
-    (void)drive_dir;
-    (void)max_speed_mm_s;
-    (void)max_gyro_deg_s;
+    const USER_STATE_Estimate_t *est;
+    int32_t abs_angle_deg;
+    int32_t abs_radius_mm;
 
-    return USER_MCM_STATUS_PARAM_ERROR;
+    if (USER_MCM_IsBusy())
+    {
+        return USER_MCM_STATUS_BUSY;
+    }
+    if ((radius_mm <= (int32_t)(VEHICLE_TRACK_WIDTH_MM * 0.5f)) ||
+        (arc_angle_deg == 0) ||
+        (max_speed_mm_s <= 0) ||
+        (max_gyro_deg_s <= 0))
+    {
+        return USER_MCM_STATUS_PARAM_ERROR;
+    }
+    if (((turn_dir != USER_MCM_TURN_LEFT) && (turn_dir != USER_MCM_TURN_RIGHT)) ||
+        ((drive_dir != USER_MCM_DRIVE_FORWARD) && (drive_dir != USER_MCM_DRIVE_BACKWARD)))
+    {
+        return USER_MCM_STATUS_PARAM_ERROR;
+    }
+
+    est = USER_State_GetEstimate();
+    if ((est->distance_valid == 0u) || (est->yaw_valid == 0u))
+    {
+        return USER_MCM_STATUS_ENCODER_ERROR;
+    }
+
+    abs_angle_deg = MCM_ABS_I32(arc_angle_deg);
+    abs_radius_mm = MCM_ABS_I32(radius_mm);
+
+    mcm.type = USER_MCM_ACTION_ARC;
+    mcm.state = USER_MCM_STATE_START;
+    mcm.status = USER_MCM_STATUS_BUSY;
+    mcm.drive_dir = (int32_t)drive_dir;
+    mcm.spin_dir = (int32_t)turn_dir;
+    mcm.target_abs = (float)abs_radius_mm * ((float)abs_angle_deg * MCM_PI / 180.0f);
+    mcm.target_signed = (float)mcm.drive_dir * mcm.target_abs;
+    mcm.max_rate = (float)max_speed_mm_s;
+    mcm.arc_radius_mm = (float)abs_radius_mm;
+    mcm.arc_target_yaw_deg = (float)(mcm.drive_dir * mcm.spin_dir * abs_angle_deg);
+    mcm.arc_max_gyro_deg_s = (float)max_gyro_deg_s;
+    mcm.start_distance_mm = est->distance_mm;
+    mcm.start_x_mm = est->x_mm;
+    mcm.start_y_mm = est->y_mm;
+    mcm.start_yaw_deg = est->yaw_deg;
+    mcm.last_yaw_deg = est->yaw_deg;
+    mcm.relative_distance_mm = 0.0f;
+    mcm.relative_yaw_deg = 0.0f;
+    mcm.progress = 0.0f;
+    mcm.remaining = mcm.target_abs;
+    mcm.heading_hold_enabled = 0u;
+    mcm.timeout_ms = MCM_TIMEOUT_MS((int32_t)mcm.target_abs, max_speed_mm_s, MCM_MOVE_TIMEOUT_BASE_MS);
+
+    return USER_MCM_STATUS_OK;
 }
 
 /**

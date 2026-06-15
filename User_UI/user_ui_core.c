@@ -1,5 +1,6 @@
 #include "user_ui_internal.h"
 #include "user_ui_unittest_actions.h"
+#include "userapp_race.h"
 #include "userlib_oled.h"
 
 #define USER_UI_HEARTBEAT_PERIOD_TICKS 100u
@@ -149,15 +150,30 @@ static void USER_UI_Core_DispatchMenuButtons(void)
 static bool USER_UI_Core_ServiceRoutePage(void)
 {
     bool was_busy;
+    uint8_t route;
+    DisplayPage_t page;
 
-    if ((USER_UI_Core_GetViewMode() != UI_VIEW_PAGE) ||
-        (USER_UI_Core_GetCurrentPage() != PAGE_TEMPLATE))
+    if (USER_UI_Core_GetViewMode() != UI_VIEW_PAGE)
+    {
+        return false;
+    }
+
+    page = USER_UI_Core_GetCurrentPage();
+    if (page == PAGE_TEMPLATE)
+    {
+        route = RACE_ROUTE_TEMPLATE;
+    }
+    else if (page == PAGE_ARC_TEST)
+    {
+        route = RACE_ROUTE_ARC_TEST;
+    }
+    else
     {
         return false;
     }
 
     was_busy = USER_UI_Route_IsBusy();
-    USER_UI_Route_Service5ms((button_press_time[ENTER] > 0u), button_press_time[ENTER]);
+    USER_UI_Route_Service5ms(route, (button_press_time[ENTER] > 0u), button_press_time[ENTER]);
     return was_busy || USER_UI_Route_IsBusy();
 }
 

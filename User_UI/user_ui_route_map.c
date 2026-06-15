@@ -67,12 +67,34 @@ static const USER_UI_RoutePrimitive_t user_ui_template_route_map[] = {
     USER_UI_ROUTE_LINE(41u, 25u, 44u, 28u),
 };
 
+static const USER_UI_RoutePrimitive_t user_ui_arc_test_route_map[] = {
+    USER_UI_ROUTE_RECT(0u, 0u, 58u, 55u),
+
+    USER_UI_ROUTE_ARC(25u, 30u, 16u, 270u, 360u),
+    USER_UI_ROUTE_LINE(25u, 14u, 31u, 14u),
+    USER_UI_ROUTE_LINE(31u, 14u, 28u, 11u),
+    USER_UI_ROUTE_LINE(31u, 14u, 28u, 17u),
+
+    USER_UI_ROUTE_ARC(36u, 19u, 8u, 90u, 180u),
+    USER_UI_ROUTE_LINE(36u, 27u, 36u, 42u),
+    USER_UI_ROUTE_LINE(36u, 42u, 33u, 39u),
+    USER_UI_ROUTE_LINE(36u, 42u, 39u, 39u),
+
+    USER_UI_ROUTE_ARC(36u, 42u, 8u, 0u, 180u),
+};
+
 static const USER_UI_RouteMapDef_t user_ui_route_maps[] = {
     {
         RACE_ROUTE_TEMPLATE,
         user_ui_template_route_map,
         (uint8_t)(sizeof(user_ui_template_route_map) /
                   sizeof(user_ui_template_route_map[0])),
+    },
+    {
+        RACE_ROUTE_ARC_TEST,
+        user_ui_arc_test_route_map,
+        (uint8_t)(sizeof(user_ui_arc_test_route_map) /
+                  sizeof(user_ui_arc_test_route_map[0])),
     },
 };
 

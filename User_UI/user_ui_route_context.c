@@ -87,7 +87,7 @@ uint16_t USER_UI_Route_GetCountdownRemainMs(void)
     return route_ctx.countdown_remain_ms;
 }
 
-void USER_UI_Route_Service5ms(bool enter_is_pressed, uint16_t enter_press_time_ms)
+void USER_UI_Route_Service5ms(uint8_t route, bool enter_is_pressed, uint16_t enter_press_time_ms)
 {
     if (route_ctx.wait_for_enter_release)
     {
@@ -100,7 +100,7 @@ void USER_UI_Route_Service5ms(bool enter_is_pressed, uint16_t enter_press_time_m
 
     if (!USER_UI_Route_IsBusy() && enter_is_pressed)
     {
-        USER_UI_Route_StartCharge(RACE_ROUTE_TEMPLATE);
+        USER_UI_Route_StartCharge(route);
         USER_OLED_CleanScreen();
         USER_UI_Core_MarkStaticDirty();
     }

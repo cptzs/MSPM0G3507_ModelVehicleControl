@@ -83,6 +83,19 @@ static bool USER_Race_StartAction(const USER_Race_Action_t *action)
                                     (int32_t)action->param2);
         return status == USER_MCM_STATUS_OK;
 
+    case USER_Race_ACTION_ARC:
+        status = USER_MCM_StartArc((int32_t)action->param1,
+                                   (int32_t)action->param2,
+                                   ((action->flags & USER_RACE_ACTION_FLAG_TURN_RIGHT) != 0u)
+                                       ? USER_MCM_TURN_RIGHT
+                                       : USER_MCM_TURN_LEFT,
+                                   ((action->flags & USER_RACE_ACTION_FLAG_DRIVE_BACKWARD) != 0u)
+                                       ? USER_MCM_DRIVE_BACKWARD
+                                       : USER_MCM_DRIVE_FORWARD,
+                                   300,
+                                   90);
+        return status == USER_MCM_STATUS_OK;
+
     case USER_Race_ACTION_WAIT_MS:
         return true;
 
@@ -117,6 +130,7 @@ static bool USER_Race_IsActionDone(const USER_Race_TableExecutor_t *executor,
     {
     case USER_Race_ACTION_MOVE_DISTANCE:
     case USER_Race_ACTION_ROTATE_ANGLE:
+    case USER_Race_ACTION_ARC:
         return !USER_MCM_IsBusy();
 
     case USER_Race_ACTION_WAIT_MS:
@@ -147,6 +161,7 @@ static bool USER_Race_IsActionSuccess(const USER_Race_Action_t *action)
     {
     case USER_Race_ACTION_MOVE_DISTANCE:
     case USER_Race_ACTION_ROTATE_ANGLE:
+    case USER_Race_ACTION_ARC:
         return USER_MCM_GetStatus() == USER_MCM_STATUS_OK;
 
     case USER_Race_ACTION_WAIT_MS:

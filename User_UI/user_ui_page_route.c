@@ -22,6 +22,16 @@
 
 static uint8_t s_route_last_progress = 0xFFu;
 
+static uint8_t USER_UI_RouteCurrentRoute(void)
+{
+    if (USER_UI_Core_GetCurrentPage() == PAGE_ARC_TEST)
+    {
+        return RACE_ROUTE_ARC_TEST;
+    }
+
+    return RACE_ROUTE_TEMPLATE;
+}
+
 /**
  * @brief 返回 int16_t 的绝对值（uint16_t）。
  */
@@ -241,6 +251,12 @@ static void USER_UI_RouteFormatStepText(const USER_Race_Action_t *action_ptr,
         USER_UI_RouteAppendU16(&cursor, &remaining, main_value);
         break;
 
+    case USER_Race_ACTION_ARC:
+        main_value = USER_UI_RouteAbsI16((int16_t)action_ptr->param2);
+        USER_UI_RouteAppendText(&cursor, &remaining, "ARC");
+        USER_UI_RouteAppendU16(&cursor, &remaining, main_value);
+        break;
+
     case USER_Race_ACTION_WAIT_MS:
         main_value = (uint16_t)action_ptr->param1;
         USER_UI_RouteAppendText(&cursor, &remaining, "WT ");
@@ -282,7 +298,9 @@ static bool USER_UI_RouteGetDisplayAction(USER_Race_Action_t *action_ptr,
         return true;
     }
 
-    has_action = USER_Race_GetTemplatePreviewAction(action_ptr, timeout_remain_ptr);
+    has_action = USER_Race_GetRoutePreviewAction(USER_UI_RouteCurrentRoute(),
+                                                 action_ptr,
+                                                 timeout_remain_ptr);
     if (has_action)
     {
         if (step_index_ptr != NULL)
@@ -300,12 +318,16 @@ static bool USER_UI_RouteGetDisplayAction(USER_Race_Action_t *action_ptr,
  */
 void USER_UI_ShowRouteStatic(void)
 {
-    USER_UI_RouteMap_Draw(RACE_ROUTE_TEMPLATE);
+    uint8_t route = USER_UI_RouteCurrentRoute();
 
-    USER_OLED_PutString(2u, UI_ROUTE_INFO_COL, "R00 ", 4u);
+    USER_UI_RouteMap_Draw(route);
+
+    USER_OLED_PutString(2u, UI_ROUTE_INFO_COL, "R0", 2u);
+    USER_OLED_PutUI16(2u, UI_ROUTE_INFO_COL + 2u, route, 1u);
+    USER_OLED_PutString(2u, UI_ROUTE_INFO_COL + 3u, " ", 1u);
     USER_OLED_PutString(2u,
                         UI_ROUTE_INFO_COL + 4u,
-                        USER_Race_GetRouteName(RACE_ROUTE_TEMPLATE),
+                        USER_Race_GetRouteName(route),
                         7u);
     USER_OLED_PutString(3u, UI_ROUTE_INFO_COL, "HOLD", 4u);
     USER_UI_RouteDrawProgressBar(0u);

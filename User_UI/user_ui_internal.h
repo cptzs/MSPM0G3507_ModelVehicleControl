@@ -33,6 +33,7 @@ typedef enum
     PAGE_SYSINFO,
     PAGE_IMU_SUM,
     PAGE_TEMPLATE,
+    PAGE_ARC_TEST,
     PAGE_UNITTEST
 } DisplayPage_t;
 
@@ -117,7 +118,7 @@ bool USER_UI_Route_IsWaitingRelease(void);
 bool USER_UI_Route_IsCountdown(void);
 uint8_t USER_UI_Route_GetPendingRoute(void);
 uint16_t USER_UI_Route_GetCountdownRemainMs(void);
-void USER_UI_Route_Service5ms(bool enter_is_pressed, uint16_t enter_press_time_ms);
+void USER_UI_Route_Service5ms(uint8_t route, bool enter_is_pressed, uint16_t enter_press_time_ms);
 
 /* ---- 页面绘制函数声明 ---- */
 void USER_UI_ShowMotorPageStatic(void);

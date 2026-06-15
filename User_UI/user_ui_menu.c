@@ -7,6 +7,7 @@
 
 static const USER_UI_MenuItem_t ui_menu_run_route_items[] = {
     {"Fixed Route", PAGE_TEMPLATE, USER_UI_MENU_ITEM_ENABLED},
+    {"Arc Test", PAGE_ARC_TEST, USER_UI_MENU_ITEM_ENABLED},
 };
 
 static const USER_UI_MenuItem_t ui_menu_auto_pilot_items[] = {
